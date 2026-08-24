@@ -3,7 +3,7 @@ import {
   Home, BookOpen, CalendarDays, Calendar as CalendarIcon, ClipboardList,
   BarChart3, Bell, User, LogOut, Upload, Paperclip, CheckCircle2, Clock,
   AlertCircle, FileText, ChevronLeft, ChevronRight, X,
-  Lock, UserCircle, ChevronDown, RotateCcw, MapPin, Loader2
+  Lock, UserCircle, ChevronDown, RotateCcw, MapPin, Loader2, Sparkles
 } from "lucide-react";
 
 /* ============================== ДАННЫЕ ============================== */
@@ -268,7 +268,7 @@ const ANNOUNCEMENTS = [
 
 const STATUS_META = {
   new: { label: "Новое", classes: "bg-slate-100 text-slate-700 border-slate-300", icon: FileText },
-  review: { label: "На проверке", classes: "bg-blue-50 text-blue-700 border-blue-300", icon: Clock },
+  review: { label: "Ожидание", classes: "bg-blue-50 text-blue-700 border-blue-300", icon: Clock },
   graded: { label: "Проверено", classes: "bg-emerald-50 text-emerald-700 border-emerald-300", icon: CheckCircle2 },
   overdue: { label: "Просрочено", classes: "bg-red-50 text-red-700 border-red-300", icon: AlertCircle },
 };
@@ -281,6 +281,38 @@ const COLOR_MAP = {
   emerald: { bg: "bg-emerald-600", light: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200", ring: "ring-emerald-500" },
   slate: { bg: "bg-slate-600", light: "bg-slate-50", text: "text-slate-700", border: "border-slate-200", ring: "ring-slate-500" },
 };
+
+/**
+ * SHYNDYQ — заготовка под будущую систему проверки работ.
+ * Показывается рядом со статусом, как только работа отправлена
+ * (статусы «Ожидание» и «Проверено»). Сама проверка ещё не подключена —
+ * показатели «Стиль» и «ИИ» зарезервированы как места под будущие значения.
+ */
+function ShyndyqBadge({ compact = false }) {
+  if (compact) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50/80 px-2 py-0.5">
+        <Sparkles size={10} className="text-violet-500" />
+        <span className="text-[9px] font-bold uppercase tracking-wider text-violet-700">Shyndyq</span>
+      </span>
+    );
+  }
+  return (
+    <div className="inline-flex items-center gap-2 rounded-full border border-violet-200 bg-gradient-to-r from-violet-50 to-white pl-2 pr-3 py-1">
+      <span className="w-5 h-5 rounded-full bg-violet-600 flex items-center justify-center shrink-0">
+        <Sparkles size={11} className="text-white" />
+      </span>
+      <span className="text-[11px] font-bold uppercase tracking-wider text-violet-700">Shyndyq</span>
+      <span className="w-px h-3 bg-violet-200" />
+      <span className="text-[11px] text-slate-400">
+        Стиль <span className="text-slate-300 font-semibold">—</span>
+      </span>
+      <span className="text-[11px] text-slate-400">
+        ИИ <span className="text-slate-300 font-semibold">—</span>
+      </span>
+    </div>
+  );
+}
 
 function fmtDate(d) {
   if (!d) return "";
@@ -985,6 +1017,7 @@ function AssignmentRow({ a, onClick }) {
   const meta = STATUS_META[status];
   const StatusIcon = meta.icon;
   const dl = deadlineLabel(new Date(a.deadline));
+  const showShyndyq = status === "review" || status === "graded";
   return (
     <button onClick={onClick} className="w-full text-left flex items-center gap-3 p-3.5 rounded-xl border border-slate-200 bg-white hover:border-cyan-300 hover:shadow-sm transition-all">
       <div className={`w-1.5 self-stretch rounded-full ${COLOR_MAP[course.color].bg}`} />
@@ -997,42 +1030,66 @@ function AssignmentRow({ a, onClick }) {
       ) : (
         <span className={`text-xs font-medium shrink-0 hidden sm:inline ${dl.urgent ? "text-red-600" : "text-slate-400"}`}>{dl.text}</span>
       )}
-      <span className={`text-[11px] font-medium px-2 py-1 rounded-full border flex items-center gap-1 shrink-0 ${meta.classes}`}>
-        <StatusIcon size={12} /> {meta.label}
-      </span>
+      <div className="flex items-center gap-1.5 shrink-0">
+        {showShyndyq && <ShyndyqBadge compact />}
+        <span className={`text-[11px] font-semibold uppercase tracking-wide px-2 py-1 rounded-full border flex items-center gap-1 ${meta.classes}`}>
+          <StatusIcon size={12} /> {meta.label}
+        </span>
+      </div>
     </button>
   );
 }
 
 function AssignmentsList({ assignments, onOpen }) {
-  const [filter, setFilter] = useState("all");
-  const filters = [
-    { key: "all", label: "Все" },
-    { key: "new", label: "Новые" },
-    { key: "review", label: "На проверке" },
-    { key: "graded", label: "Проверено" },
-    { key: "overdue", label: "Просрочено" },
-  ];
-  const filtered = assignments.filter((a) => filter === "all" || effectiveStatus(a) === filter)
+  const [courseFilter, setCourseFilter] = useState("all");
+  const [open, setOpen] = useState(false);
+
+  const activeCourse = courseFilter === "all" ? null : courseById(courseFilter);
+  const filtered = assignments
+    .filter((a) => courseFilter === "all" || a.courseId === courseFilter)
     .sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
 
   return (
     <div>
-      <div className="flex gap-2 overflow-x-auto pb-1 mb-4">
-        {filters.map((f) => (
-          <button
-            key={f.key}
-            onClick={() => setFilter(f.key)}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap border transition-colors ${
-              filter === f.key ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
-            }`}
-          >
-            {f.label}
-          </button>
-        ))}
+      <div className="relative mb-5">
+        <button
+          onClick={() => setOpen((o) => !o)}
+          className="inline-flex items-center gap-2 pl-1.5 pr-3 py-1.5 rounded-full border border-slate-200 bg-white hover:border-slate-300 shadow-sm transition-colors text-sm font-semibold text-slate-800"
+        >
+          <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0 ${activeCourse ? COLOR_MAP[activeCourse.color].bg : "bg-slate-900"}`}>
+            {activeCourse ? activeCourse.title[0] : "∀"}
+          </span>
+          <span className="uppercase tracking-wide">{activeCourse ? activeCourse.title : "Все"}</span>
+          <ChevronDown size={14} className={`text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
+        </button>
+
+        {open && (
+          <>
+            <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+            <div className="absolute z-20 mt-2 w-64 bg-white rounded-xl border border-slate-200 shadow-lg py-1.5 left-0 overflow-hidden">
+              <button
+                onClick={() => { setCourseFilter("all"); setOpen(false); }}
+                className={`w-full text-left flex items-center gap-2.5 px-3.5 py-2 text-sm hover:bg-slate-50 transition-colors ${courseFilter === "all" ? "font-semibold text-slate-900" : "text-slate-600"}`}
+              >
+                <span className="w-2 h-2 rounded-full bg-slate-900 shrink-0" /> Все предметы
+              </button>
+              <div className="h-px bg-slate-100 my-1 mx-3.5" />
+              {COURSES.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => { setCourseFilter(c.id); setOpen(false); }}
+                  className={`w-full text-left flex items-center gap-2.5 px-3.5 py-2 text-sm hover:bg-slate-50 transition-colors ${courseFilter === c.id ? "font-semibold text-slate-900" : "text-slate-600"}`}
+                >
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${COLOR_MAP[c.color].bg}`} /> {c.title}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </div>
+
       <div className="space-y-2">
-        {filtered.length === 0 && <p className="text-sm text-slate-500 py-6 text-center">Заданий в этой категории нет.</p>}
+        {filtered.length === 0 && <p className="text-sm text-slate-500 py-6 text-center">Заданий по выбранному предмету нет.</p>}
         {filtered.map((a) => <AssignmentRow key={a.id} a={a} onClick={() => onOpen(a.id)} />)}
       </div>
     </div>
@@ -1100,9 +1157,12 @@ function AssignmentDetail({ assignment, onBack, onUpdate }) {
             <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${COLOR_MAP[course.color].light} ${COLOR_MAP[course.color].text}`}>{course.title}</span>
             <h2 className="text-xl font-bold text-slate-900 mt-2">{assignment.title}</h2>
           </div>
-          <span className={`text-xs font-semibold px-3 py-1.5 rounded-full border flex items-center gap-1.5 shrink-0 ${meta.classes}`}>
-            <StatusIcon size={14} /> {meta.label}
-          </span>
+          <div className="flex items-center gap-2 shrink-0">
+            {(status === "review" || status === "graded") && <ShyndyqBadge />}
+            <span className={`text-xs font-semibold uppercase tracking-wide px-3 py-1.5 rounded-full border flex items-center gap-1.5 ${meta.classes}`}>
+              <StatusIcon size={14} /> {meta.label}
+            </span>
+          </div>
         </div>
 
         <div className="grid sm:grid-cols-4 gap-3 mt-5 text-xs">
@@ -1160,13 +1220,13 @@ function AssignmentDetail({ assignment, onBack, onUpdate }) {
           </div>
         )}
 
-        {/* Текущая сдача (если на проверке) */}
+        {/* Текущая сдача (статус «Ожидание») */}
         {status === "review" && assignment.submission && (
           <div className="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-4">
             <div className="flex items-center gap-2 text-sm font-bold text-blue-800">
-              <Clock size={16} /> Работа на проверке
+              <Clock size={16} /> Ожидание проверки
             </div>
-            <p className="text-xs text-blue-700 mt-1">
+            <p className="text-xs text-blue-700 mt-2">
               Отправлено: {fmtDateTime(new Date(assignment.submission.submittedAt))}
               {assignment.submission.late && <span className="ml-1 font-semibold">(с опозданием)</span>}
             </p>
@@ -1187,7 +1247,7 @@ function AssignmentDetail({ assignment, onBack, onUpdate }) {
         {canSubmitNow && (
           <div className="mt-6 rounded-xl border border-slate-200 p-4">
             <h4 className="text-sm font-bold text-slate-800 mb-3">
-              {showResubmitForm ? "Повторная отправка работы" : "Выполнить и сдать работу"}
+              {showResubmitForm ? "Повторная отправка работы" : "Загрузка работы"}
             </h4>
             {status === "overdue" && (
               <div className="mb-3 flex items-center gap-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
@@ -1229,7 +1289,7 @@ function AssignmentDetail({ assignment, onBack, onUpdate }) {
                 className="bg-cyan-600 hover:bg-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors flex items-center gap-2"
               >
                 {submitting && <Loader2 size={15} className="animate-spin" />}
-                {submitting ? "Отправка..." : "Сдать работу"}
+                {submitting ? "Отправка..." : "Подтвердить"}
               </button>
               {showResubmitForm && (
                 <button onClick={() => { setShowResubmitForm(false); setText(""); setFiles([]); }} className="text-sm font-medium text-slate-500 hover:text-slate-800 px-3 py-2.5">
