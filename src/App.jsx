@@ -3,8 +3,13 @@ import {
   Home, BookOpen, CalendarDays, Calendar as CalendarIcon, ClipboardList,
   BarChart3, Bell, User, LogOut, Upload, Paperclip, CheckCircle2, Clock,
   AlertCircle, FileText, ChevronLeft, ChevronRight, X,
-  Lock, UserCircle, ChevronDown, RotateCcw, MapPin, Loader2, Sparkles
+  Lock, UserCircle, ChevronDown, RotateCcw, MapPin, Loader2, Sparkles,
+  GraduationCap, Users
 } from "lucide-react";
+import { ShyndyqBadge, ShyndyqReport } from "./Shyndyq";
+import { TeacherDashboard, TEACHER } from "./TeacherView";
+import { buildReport, analyzeSubmission } from "./shynClient";
+import { AuthorEngineView, AUTHOR_ACCOUNTS } from "./AuthorEngineView";
 
 /* ============================== ДАННЫЕ ============================== */
 
@@ -283,35 +288,29 @@ const COLOR_MAP = {
 };
 
 /**
- * SHYNDYQ — заготовка под будущую систему проверки работ.
- * Показывается рядом со статусом, как только работа отправлена
- * (статусы «Ожидание» и «Проверено»). Сама проверка ещё не подключена —
- * показатели «Стиль» и «ИИ» зарезервированы как места под будущие значения.
+ * SHYNDYQ — интеграция с сервисом проверки стиля/ИИ-происхождения работ.
+ * Компоненты бейджа и полного отчёта вынесены в ./Shyndyq.jsx, мок-клиент,
+ * повторяющий контракт реального API — в ./shynClient.js.
+ *
+ * Ниже — детерминированные параметры анализа для уже существующих в демо-
+ * данных сдач (id сдачи, сколько предыдущих самостоятельных работ студента
+ * уже накоплено, и профиль результата для наглядности сценариев).
  */
-function ShyndyqBadge({ compact = false }) {
-  if (compact) {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50/80 px-2 py-0.5">
-        <Sparkles size={10} className="text-violet-500" />
-        <span className="text-[9px] font-bold uppercase tracking-wider text-violet-700">Shyndyq</span>
-      </span>
-    );
-  }
-  return (
-    <div className="inline-flex items-center gap-2 rounded-full border border-violet-200 bg-gradient-to-r from-violet-50 to-white pl-2 pr-3 py-1">
-      <span className="w-5 h-5 rounded-full bg-violet-600 flex items-center justify-center shrink-0">
-        <Sparkles size={11} className="text-white" />
-      </span>
-      <span className="text-[11px] font-bold uppercase tracking-wider text-violet-700">Shyndyq</span>
-      <span className="w-px h-3 bg-violet-200" />
-      <span className="text-[11px] text-slate-400">
-        Стиль <span className="text-slate-300 font-semibold">—</span>
-      </span>
-      <span className="text-[11px] text-slate-400">
-        ИИ <span className="text-slate-300 font-semibold">—</span>
-      </span>
-    </div>
-  );
+const SHYN_SEEDS = {
+  a2: { priorWorksCount: 4, profile: "high" }, // на проверке — Shyndyq уже доступен
+  a3: { priorWorksCount: 5, profile: "high", seed: "a3-s1" }, // тот же seed, что и в роспуске преподавателя — согласованный результат
+  a6: { priorWorksCount: 3, profile: "high" },
+  a8: { priorWorksCount: 3, profile: "low" }, // низкая оценка + расхождение стиля — понятная связка для демо
+};
+
+function shynReportFor(assignmentId) {
+  const cfg = SHYN_SEEDS[assignmentId];
+  if (!cfg) return null;
+  return buildReport({
+    submissionId: cfg.seed || assignmentId,
+    priorWorksCount: cfg.priorWorksCount,
+    profile: cfg.profile,
+  });
 }
 
 function fmtDate(d) {
@@ -377,7 +376,7 @@ function Logo({ size = 24, className = "" }) {
   );
 }
 
-const NAV_ITEMS = [
+const STUDENT_NAV_ITEMS = [
   { key: "home", label: "Главная", icon: Home },
   { key: "courses", label: "Мои дисциплины", icon: BookOpen },
   { key: "schedule", label: "Расписание", icon: CalendarDays },
@@ -388,15 +387,30 @@ const NAV_ITEMS = [
   { key: "profile", label: "Профиль", icon: User },
 ];
 
+const TEACHER_NAV_ITEMS = [
+  { key: "review", label: "Проверка работ", icon: Users },
+  { key: "profile", label: "Профиль", icon: User },
+];
+
 /* ============================== ГЛАВНЫЙ КОМПОНЕНТ ============================== */
 
 export default function App() {
   const [loggedIn, setLoggedIn] = useState(false);
+  const [role, setRole] = useState("student"); // 'student' | 'teacher' | 'engine'
+  const [engineAccount, setEngineAccount] = useState(null);
   const [activeTab, setActiveTab] = useState("home");
   const [selectedCourseId, setSelectedCourseId] = useState(null);
   const [selectedAssignmentId, setSelectedAssignmentId] = useState(null);
   const [assignments, setAssignments] = useState(initialAssignments);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [shynReports, setShynReports] = useState(() => {
+    const initial = {};
+    Object.keys(SHYN_SEEDS).forEach((id) => { initial[id] = shynReportFor(id); });
+    return initial;
+  });
+  const [reportView, setReportView] = useState(null); // { report, context, isTeacher } | null
+
+  const navItems = role === "teacher" ? TEACHER_NAV_ITEMS : STUDENT_NAV_ITEMS;
 
   const updateAssignment = (id, patch) => {
     setAssignments((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a)));
@@ -407,12 +421,75 @@ export default function App() {
     setActiveTab("assignments");
   };
 
+  // Запускает анализ Shyn сразу после сдачи работы студентом — имитирует
+  // реальный флоу: POST /submit → job_id → polling → отчёт (см. shynClient.js)
+  const handleSubmitted = (assignmentId) => {
+    setShynReports((prev) => ({ ...prev, [assignmentId]: "loading" }));
+    const priorWorksCount = assignments.filter((a) => a.submission).length; // растущая история сдач
+    analyzeSubmission({ submissionId: assignmentId, priorWorksCount, profile: "high" }).then((report) => {
+      setShynReports((prev) => ({ ...prev, [assignmentId]: report }));
+    });
+  };
+
+  const openStudentReport = (assignment) => {
+    const report = shynReports[assignment.id];
+    if (!report || report === "loading") return;
+    setReportView({
+      report,
+      context: { assignmentTitle: assignment.title, courseTitle: courseById(assignment.courseId)?.title },
+      isTeacher: false,
+    });
+  };
+
+  const openTeacherReport = (row) => {
+    setReportView({
+      report: row.report,
+      context: {
+        studentName: row.studentName,
+        assignmentTitle: "Задание 2: Верстка адаптивной страницы",
+        courseTitle: "Web-программирование",
+      },
+      isTeacher: true,
+    });
+  };
+
   if (!loggedIn) {
-    return <LoginScreen onLogin={() => setLoggedIn(true)} />;
+    return (
+      <LoginScreen
+        onLogin={(chosenRole, extra) => {
+          setRole(chosenRole);
+          if (chosenRole === "engine") setEngineAccount(extra);
+          setLoggedIn(true);
+        }}
+      />
+    );
+  }
+
+  if (role === "engine" && engineAccount) {
+    return (
+      <div className="min-h-screen w-full bg-slate-50 text-slate-900">
+        <header className="sticky top-0 z-10 bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Logo size={26} />
+            <span className="text-sm font-bold">{UNIVERSITY.shortName} · Технический прогон Shyndyq</span>
+          </div>
+          <button
+            onClick={() => { setLoggedIn(false); setEngineAccount(null); }}
+            className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800"
+          >
+            <LogOut size={15} /> Выйти
+          </button>
+        </header>
+        <main className="p-4 sm:p-6 max-w-3xl w-full mx-auto">
+          <AuthorEngineView account={engineAccount} />
+        </main>
+      </div>
+    );
   }
 
   const selectedAssignment = assignments.find((a) => a.id === selectedAssignmentId);
   const selectedCourse = selectedCourseId ? courseById(selectedCourseId) : null;
+  const currentLabel = reportView ? "Shyndyq · Отчёт" : navItems.find((n) => n.key === activeTab)?.label;
 
   return (
     <div className="min-h-screen w-full bg-slate-50 text-slate-900 flex">
@@ -422,18 +499,18 @@ export default function App() {
           <Logo size={38} className="shrink-0" />
           <div className="min-w-0">
             <div className="text-sm font-bold leading-tight truncate tracking-wide">{UNIVERSITY.shortName}</div>
-            <div className="text-[11px] text-slate-400 leading-tight truncate">Портал студента</div>
+            <div className="text-[11px] text-slate-400 leading-tight truncate">{role === "teacher" ? "Портал преподавателя" : "Портал студента"}</div>
           </div>
         </div>
 
         <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
-          {NAV_ITEMS.map((item) => {
+          {navItems.map((item) => {
             const Icon = item.icon;
-            const active = activeTab === item.key;
+            const active = activeTab === item.key && !reportView;
             return (
               <button
                 key={item.key}
-                onClick={() => { setActiveTab(item.key); setSelectedCourseId(null); setSelectedAssignmentId(null); setMobileNavOpen(false); }}
+                onClick={() => { setActiveTab(item.key); setSelectedCourseId(null); setSelectedAssignmentId(null); setMobileNavOpen(false); setReportView(null); }}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                   active ? "bg-cyan-600 text-white" : "text-slate-300 hover:bg-slate-800 hover:text-white"
                 }`}
@@ -448,11 +525,11 @@ export default function App() {
         <div className="border-t border-slate-800 p-3">
           <div className="flex items-center gap-3 px-2 py-2 rounded-lg">
             <div className="w-9 h-9 rounded-full bg-amber-400 text-slate-900 font-bold flex items-center justify-center text-sm shrink-0">
-              НА
+              {role === "teacher" ? "КР" : "НА"}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-xs font-semibold truncate">{STUDENT.firstName} Ахметов</div>
-              <div className="text-[11px] text-slate-400 truncate">{STUDENT.group}</div>
+              <div className="text-xs font-semibold truncate">{role === "teacher" ? TEACHER.fullName.split(" ")[0] + " " + TEACHER.fullName.split(" ")[1] : STUDENT.firstName + " Ахметов"}</div>
+              <div className="text-[11px] text-slate-400 truncate">{role === "teacher" ? TEACHER.department : STUDENT.group}</div>
             </div>
           </div>
           <button
@@ -475,7 +552,7 @@ export default function App() {
             <button className="lg:hidden p-2 -ml-2 rounded-md hover:bg-slate-100" onClick={() => setMobileNavOpen(true)}>
               <ClipboardList size={20} />
             </button>
-            <h1 className="text-lg font-bold truncate">{NAV_ITEMS.find((n) => n.key === activeTab)?.label}</h1>
+            <h1 className="text-lg font-bold truncate">{currentLabel}</h1>
           </div>
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <span className="hidden sm:inline">{TODAY.toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</span>
@@ -483,14 +560,24 @@ export default function App() {
         </header>
 
         <main className="flex-1 p-4 sm:p-6 max-w-6xl w-full mx-auto">
-          {activeTab === "home" && (
+          {reportView && (
+            <ShyndyqReport
+              report={reportView.report}
+              context={reportView.context}
+              isTeacher={reportView.isTeacher}
+              onBack={() => setReportView(null)}
+              onAction={() => setReportView(null)}
+            />
+          )}
+
+          {!reportView && role === "student" && activeTab === "home" && (
             <Dashboard assignments={assignments} onOpenAssignment={goToAssignment} onGoTo={setActiveTab} />
           )}
 
-          {activeTab === "courses" && !selectedCourse && (
+          {!reportView && role === "student" && activeTab === "courses" && !selectedCourse && (
             <CoursesList onOpenCourse={setSelectedCourseId} assignments={assignments} />
           )}
-          {activeTab === "courses" && selectedCourse && (
+          {!reportView && role === "student" && activeTab === "courses" && selectedCourse && (
             <CourseDetail
               course={selectedCourse}
               assignments={assignments.filter((a) => a.courseId === selectedCourse.id)}
@@ -499,23 +586,30 @@ export default function App() {
             />
           )}
 
-          {activeTab === "schedule" && <Schedule />}
-          {activeTab === "calendar" && <CalendarView assignments={assignments} onOpenAssignment={goToAssignment} />}
+          {!reportView && role === "student" && activeTab === "schedule" && <Schedule />}
+          {!reportView && role === "student" && activeTab === "calendar" && <CalendarView assignments={assignments} onOpenAssignment={goToAssignment} />}
 
-          {activeTab === "assignments" && !selectedAssignment && (
-            <AssignmentsList assignments={assignments} onOpen={(id) => setSelectedAssignmentId(id)} />
+          {!reportView && role === "student" && activeTab === "assignments" && !selectedAssignment && (
+            <AssignmentsList assignments={assignments} shynReports={shynReports} onOpen={(id) => setSelectedAssignmentId(id)} />
           )}
-          {activeTab === "assignments" && selectedAssignment && (
+          {!reportView && role === "student" && activeTab === "assignments" && selectedAssignment && (
             <AssignmentDetail
               assignment={selectedAssignment}
+              shynReport={shynReports[selectedAssignment.id]}
               onBack={() => setSelectedAssignmentId(null)}
               onUpdate={updateAssignment}
+              onSubmitted={handleSubmitted}
+              onOpenShynReport={() => openStudentReport(selectedAssignment)}
             />
           )}
 
-          {activeTab === "grades" && <Grades assignments={assignments} />}
-          {activeTab === "announcements" && <Announcements />}
-          {activeTab === "profile" && <Profile />}
+          {!reportView && role === "student" && activeTab === "grades" && <Grades assignments={assignments} />}
+          {!reportView && role === "student" && activeTab === "announcements" && <Announcements />}
+          {!reportView && activeTab === "profile" && <Profile role={role} />}
+
+          {!reportView && role === "teacher" && activeTab === "review" && (
+            <TeacherDashboard onOpenReport={openTeacherReport} />
+          )}
         </main>
       </div>
     </div>
@@ -525,10 +619,16 @@ export default function App() {
 /* ============================== ЭКРАН ВХОДА ============================== */
 
 function LoginScreen({ onLogin }) {
+  const [loginRole, setLoginRole] = useState("student"); // 'student' | 'teacher' | 'engine'
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const CREDS = {
+    student: { login: "n.akhmetov", password: "student2026" },
+    teacher: { login: "r.kim", password: "teacher2026" },
+  };
 
   const submit = (e) => {
     e.preventDefault();
@@ -536,13 +636,27 @@ function LoginScreen({ onLogin }) {
       setError("Введите логин и пароль.");
       return;
     }
-    if (username.trim().toLowerCase() !== "n.akhmetov" || password !== "student2026") {
+
+    if (loginRole === "engine") {
+      const acc = AUTHOR_ACCOUNTS.find((a) => a.login === username.trim().toLowerCase());
+      if (!acc || password !== acc.password) {
+        setError("Неверный логин или пароль. Проверьте тестовые данные ниже.");
+        return;
+      }
+      setError("");
+      setLoading(true);
+      setTimeout(() => { setLoading(false); onLogin("engine", acc); }, 500);
+      return;
+    }
+
+    const c = CREDS[loginRole];
+    if (username.trim().toLowerCase() !== c.login || password !== c.password) {
       setError("Неверный логин или пароль. Проверьте тестовые данные ниже.");
       return;
     }
     setError("");
     setLoading(true);
-    setTimeout(() => { setLoading(false); onLogin(); }, 500);
+    setTimeout(() => { setLoading(false); onLogin(loginRole); }, 500);
   };
 
   return (
@@ -568,9 +682,48 @@ function LoginScreen({ onLogin }) {
         {/* Right panel — form */}
         <div className="md:w-7/12 p-8 sm:p-10">
           <h3 className="text-xl font-bold text-slate-900">Вход в личный кабинет</h3>
-          <p className="text-sm text-slate-500 mt-1">Введите учебный логин и пароль.</p>
+          <p className="text-sm text-slate-500 mt-1">Демо-платформа — выберите роль для входа.</p>
 
-          <form onSubmit={submit} className="mt-6 space-y-4">
+          <div className="mt-4 grid grid-cols-3 gap-2 p-1 bg-slate-100 rounded-lg">
+            <button
+              type="button"
+              onClick={() => { setLoginRole("student"); setUsername(""); setPassword(""); setError(""); }}
+              className={`flex items-center justify-center gap-1.5 text-xs font-semibold py-2 rounded-md transition-colors ${loginRole === "student" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+            >
+              <User size={14} /> Студент
+            </button>
+            <button
+              type="button"
+              onClick={() => { setLoginRole("teacher"); setUsername(""); setPassword(""); setError(""); }}
+              className={`flex items-center justify-center gap-1.5 text-xs font-semibold py-2 rounded-md transition-colors ${loginRole === "teacher" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+            >
+              <GraduationCap size={14} /> Преподаватель
+            </button>
+            <button
+              type="button"
+              onClick={() => { setLoginRole("engine"); setUsername(""); setPassword(""); setError(""); }}
+              className={`flex items-center justify-center gap-1.5 text-xs font-semibold py-2 rounded-md transition-colors ${loginRole === "engine" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+            >
+              <Sparkles size={14} /> Движок
+            </button>
+          </div>
+
+          {loginRole === "engine" && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {AUTHOR_ACCOUNTS.map((a) => (
+                <button
+                  key={a.login}
+                  type="button"
+                  onClick={() => { setUsername(a.login); setPassword(a.password); setError(""); }}
+                  className="text-[11px] font-medium px-2.5 py-1 rounded-full border border-slate-200 text-slate-600 hover:border-violet-300 hover:text-violet-700 transition-colors"
+                >
+                  {a.displayName}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <form onSubmit={submit} className="mt-5 space-y-4">
             <div>
               <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Логин</label>
               <div className="mt-1 relative">
@@ -578,7 +731,7 @@ function LoginScreen({ onLogin }) {
                 <input
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="n.akhmetov"
+                  placeholder={loginRole === "engine" ? "a.doyle" : CREDS[loginRole].login}
                   className="w-full pl-10 pr-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
                 />
               </div>
@@ -613,7 +766,10 @@ function LoginScreen({ onLogin }) {
 
           <button
             type="button"
-            onClick={() => { setUsername("n.akhmetov"); setPassword("student2026"); }}
+            onClick={() => {
+              if (loginRole === "engine") { setUsername(AUTHOR_ACCOUNTS[0].login); setPassword(AUTHOR_ACCOUNTS[0].password); return; }
+              setUsername(CREDS[loginRole].login); setPassword(CREDS[loginRole].password);
+            }}
             className="mt-4 text-xs text-cyan-700 hover:underline"
           >
             Заполнить автоматически
@@ -1011,7 +1167,7 @@ function CalendarView({ assignments, onOpenAssignment }) {
 
 /* ============================== ЗАДАНИЯ (список) ============================== */
 
-function AssignmentRow({ a, onClick }) {
+function AssignmentRow({ a, report, onClick }) {
   const course = courseById(a.courseId);
   const status = effectiveStatus(a);
   const meta = STATUS_META[status];
@@ -1019,7 +1175,13 @@ function AssignmentRow({ a, onClick }) {
   const dl = deadlineLabel(new Date(a.deadline));
   const showShyndyq = status === "review" || status === "graded";
   return (
-    <button onClick={onClick} className="w-full text-left flex items-center gap-3 p-3.5 rounded-xl border border-slate-200 bg-white hover:border-cyan-300 hover:shadow-sm transition-all">
+    <div
+      onClick={onClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === "Enter") onClick(); }}
+      className="w-full text-left flex items-center gap-3 p-3.5 rounded-xl border border-slate-200 bg-white hover:border-cyan-300 hover:shadow-sm transition-all cursor-pointer"
+    >
       <div className={`w-1.5 self-stretch rounded-full ${COLOR_MAP[course.color].bg}`} />
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold text-slate-800 truncate">{a.title}</p>
@@ -1031,16 +1193,16 @@ function AssignmentRow({ a, onClick }) {
         <span className={`text-xs font-medium shrink-0 hidden sm:inline ${dl.urgent ? "text-red-600" : "text-slate-400"}`}>{dl.text}</span>
       )}
       <div className="flex items-center gap-1.5 shrink-0">
-        {showShyndyq && <ShyndyqBadge compact />}
+        {showShyndyq && <ShyndyqBadge report={report} loading={report === "loading"} compact />}
         <span className={`text-[11px] font-semibold uppercase tracking-wide px-2 py-1 rounded-full border flex items-center gap-1 ${meta.classes}`}>
           <StatusIcon size={12} /> {meta.label}
         </span>
       </div>
-    </button>
+    </div>
   );
 }
 
-function AssignmentsList({ assignments, onOpen }) {
+function AssignmentsList({ assignments, shynReports, onOpen }) {
   const [courseFilter, setCourseFilter] = useState("all");
   const [open, setOpen] = useState(false);
 
@@ -1090,7 +1252,7 @@ function AssignmentsList({ assignments, onOpen }) {
 
       <div className="space-y-2">
         {filtered.length === 0 && <p className="text-sm text-slate-500 py-6 text-center">Заданий по выбранному предмету нет.</p>}
-        {filtered.map((a) => <AssignmentRow key={a.id} a={a} onClick={() => onOpen(a.id)} />)}
+        {filtered.map((a) => <AssignmentRow key={a.id} a={a} report={shynReports?.[a.id]} onClick={() => onOpen(a.id)} />)}
       </div>
     </div>
   );
@@ -1098,7 +1260,7 @@ function AssignmentsList({ assignments, onOpen }) {
 
 /* ============================== ЗАДАНИЕ — ДЕТАЛЬНАЯ СТРАНИЦА (СДАЧА РАБОТЫ) ============================== */
 
-function AssignmentDetail({ assignment, onBack, onUpdate }) {
+function AssignmentDetail({ assignment, shynReport, onBack, onUpdate, onSubmitted, onOpenShynReport }) {
   const course = courseById(assignment.courseId);
   const status = effectiveStatus(assignment);
   const meta = STATUS_META[status];
@@ -1137,6 +1299,7 @@ function AssignmentDetail({ assignment, onBack, onUpdate }) {
         feedback: null,
         history: [...assignment.history, newHistoryEntry],
       });
+      onSubmitted?.(assignment.id);
       setSubmitting(false);
       setJustSubmitted(true);
       setShowResubmitForm(false);
@@ -1158,7 +1321,9 @@ function AssignmentDetail({ assignment, onBack, onUpdate }) {
             <h2 className="text-xl font-bold text-slate-900 mt-2">{assignment.title}</h2>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            {(status === "review" || status === "graded") && <ShyndyqBadge />}
+            {(status === "review" || status === "graded") && (
+              <ShyndyqBadge report={shynReport} loading={shynReport === "loading"} onClick={onOpenShynReport} />
+            )}
             <span className={`text-xs font-semibold uppercase tracking-wide px-3 py-1.5 rounded-full border flex items-center gap-1.5 ${meta.classes}`}>
               <StatusIcon size={14} /> {meta.label}
             </span>
@@ -1433,8 +1598,36 @@ function Announcements() {
 
 /* ============================== ПРОФИЛЬ ============================== */
 
-function Profile() {
-  const [advisor] = useState(STUDENT.advisor);
+function Profile({ role }) {
+  if (role === "teacher") {
+    const fields = [
+      { label: "ФИО", value: TEACHER.fullName },
+      { label: "Кафедра", value: TEACHER.department },
+      { label: "Курируемая группа", value: TEACHER.group },
+      { label: "Дисциплина", value: "Web-программирование" },
+    ];
+    return (
+      <div className="max-w-2xl">
+        <div className="bg-white rounded-xl border border-slate-200 p-6 flex items-center gap-4">
+          <div className="w-16 h-16 rounded-full bg-amber-400 text-slate-900 font-extrabold text-xl flex items-center justify-center shrink-0">КР</div>
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">{TEACHER.fullName}</h2>
+            <p className="text-sm text-slate-500">{TEACHER.department}</p>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 mt-4 divide-y divide-slate-100">
+          {fields.map((f) => (
+            <div key={f.label} className="flex items-center justify-between px-5 py-3">
+              <span className="text-sm text-slate-500">{f.label}</span>
+              <span className="text-sm font-medium text-slate-800 text-right">{f.value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const advisor = STUDENT.advisor;
   const fields = [
     { label: "ФИО", value: STUDENT.fullName },
     { label: "Студенческий ID", value: STUDENT.studentId },
