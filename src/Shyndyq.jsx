@@ -49,6 +49,12 @@ export function ShyndyqBadge({ report, loading, compact = false, onClick }) {
   }
 
   const meta = VERDICT_META[report.verdict];
+  if (!meta) {
+    // Неизвестный/отсутствующий verdict (например report.status === "error",
+    // либо источник отчёта не был приведён к ожидаемой форме) - не роняем
+    // рендер всего приложения, просто не показываем бейдж.
+    return null;
+  }
   const Icon = report.verdict === "green" ? ShieldCheck : report.verdict === "amber" ? ShieldAlert : ShieldAlert;
 
   // compact: используется внутри строк списков, которые сами по себе часто

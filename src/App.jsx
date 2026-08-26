@@ -503,11 +503,22 @@ export default function App() {
       const text = file ? "" : (submission?.text || "");
       realAnalyzeSubmission({ file, text, expectedAuthor: currentStudent.expectedAuthor })
         .then((api) => {
+          // ShyndyqBadge (компактный бейдж в шапке задания) написан под
+          // мок-формат отчёта и ждёт report.verdict / styleScore / aiScore.
+          // У "настоящего" API этих полей нет (только docAiTier и т.п.) -
+          // без этой нормализации VERDICT_META[undefined] роняет весь рендер
+          // (см. баг: "сдал работу -> выкинуло на localhost:5173 и пусто").
+          // Маппинг tier -> verdict — та же схема, что уже используется в
+          // обратную сторону в buildTeacherMailto ниже по файлу.
+          const verdict = api.docAiTier === "red" ? "red" : api.docAiTier === "yellow" ? "amber" : "green";
           setShynReports((prev) => ({
             ...prev,
             [assignmentId]: {
               source: "real",
               status: "ready",
+              verdict,
+              styleScore: api.docStyleScore,
+              aiScore: api.docAiScore,
               expectedAuthor: api.expectedAuthor,
               docStyleScore: api.docStyleScore,
               docStyleTier: api.docStyleTier,
