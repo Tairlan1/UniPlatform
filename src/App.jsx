@@ -8,8 +8,8 @@ import {
 } from "lucide-react";
 import { ShyndyqBadge, ShyndyqReport } from "./Shyndyq";
 import { TeacherDashboard, TEACHER } from "./TeacherView";
-import { buildReport, analyzeSubmission } from "./shynClient";
-import { AuthorEngineView, AUTHOR_ACCOUNTS } from "./AuthorEngineView";
+import { buildReport, analyzeSubmission as mockAnalyzeSubmission } from "./shynClient";
+import { analyzeSubmission as realAnalyzeSubmission } from "./shynApiClient";
 
 /* ============================== ДАННЫЕ ============================== */
 
@@ -21,19 +21,74 @@ const UNIVERSITY = {
   motto: "Engineering the future",
 };
 
-const STUDENT = {
-  fullName: "Ахметов Нурлан Ерланович",
-  firstName: "Нурлан",
-  studentId: "21О-1147",
-  group: "ИС-21-1",
-  faculty: "Факультет информационных технологий",
-  specialty: "Информационные системы (6B06103)",
-  course: 3,
-  form: "Очная, гос. грант",
-  email: "n.akhmetov@damqor.edu",
-  phone: "+7 (701) 234-56-78",
-  advisor: "Сатпаева Алия Кайратовна",
-};
+// Каждый аккаунт студента - реальный логин/пароль для входа в тот же самый
+// портал (без отдельной "инженерной" роли). Обычные студенты (STUDENT_ACCOUNTS[0])
+// сравниваются с их же прошлыми работами (мок - у реальной модели нет
+// эталона "личного стиля Нурлана"). У пяти "авторских" аккаунтов ниже есть
+// expectedAuthor - ключ одного из пяти РЕАЛЬНО обученных стилей, поэтому их
+// сдачи уходят в настоящий Shyn API (см. handleSubmitted), а не в мок.
+const STUDENT_ACCOUNTS = [
+  {
+    login: "n.akhmetov", password: "student2026", expectedAuthor: null,
+    fullName: "Ахметов Нурлан Ерланович", firstName: "Нурлан", initials: "НА",
+    studentId: "21О-1147", group: "ИС-21-1",
+    faculty: "Факультет информационных технологий",
+    specialty: "Информационные системы (6B06103)",
+    course: 3, form: "Очная, гос. грант",
+    email: "n.akhmetov@damqor.edu", phone: "+7 (701) 234-56-78",
+    advisor: "Сатпаева Алия Кайратовна",
+  },
+  {
+    login: "a.doyle", password: "student2026", expectedAuthor: "ArthurConanDoyle",
+    fullName: "Doyle Arthur", firstName: "Arthur", initials: "AD",
+    studentId: "24Ф-0231", group: "ФИЛ-24-EN",
+    faculty: "Факультет зарубежной филологии",
+    specialty: "Зарубежная литература и перевод (6B02301)",
+    course: 1, form: "Очная, международный обмен",
+    email: "a.doyle@damqor.edu", phone: "+7 (701) 555-01-01",
+    advisor: "Ким Роман Сергеевич",
+  },
+  {
+    login: "e.poe", password: "student2026", expectedAuthor: "EdgarAllanPoe",
+    fullName: "Poe Edgar", firstName: "Edgar", initials: "EP",
+    studentId: "24Ф-0232", group: "ФИЛ-24-EN",
+    faculty: "Факультет зарубежной филологии",
+    specialty: "Зарубежная литература и перевод (6B02301)",
+    course: 1, form: "Очная, международный обмен",
+    email: "e.poe@damqor.edu", phone: "+7 (701) 555-01-02",
+    advisor: "Ким Роман Сергеевич",
+  },
+  {
+    login: "h.wells", password: "student2026", expectedAuthor: "H.G.Wells",
+    fullName: "Wells Herbert", firstName: "Herbert", initials: "HW",
+    studentId: "24Ф-0233", group: "ФИЛ-24-EN",
+    faculty: "Факультет зарубежной филологии",
+    specialty: "Зарубежная литература и перевод (6B02301)",
+    course: 1, form: "Очная, международный обмен",
+    email: "h.wells@damqor.edu", phone: "+7 (701) 555-01-03",
+    advisor: "Ким Роман Сергеевич",
+  },
+  {
+    login: "j.london", password: "student2026", expectedAuthor: "JackLondon",
+    fullName: "London Jack", firstName: "Jack", initials: "JL",
+    studentId: "24Ф-0234", group: "ФИЛ-24-EN",
+    faculty: "Факультет зарубежной филологии",
+    specialty: "Зарубежная литература и перевод (6B02301)",
+    course: 1, form: "Очная, международный обмен",
+    email: "j.london@damqor.edu", phone: "+7 (701) 555-01-04",
+    advisor: "Ким Роман Сергеевич",
+  },
+  {
+    login: "m.twain", password: "student2026", expectedAuthor: "MarkTwain",
+    fullName: "Twain Mark", firstName: "Mark", initials: "MT",
+    studentId: "24Ф-0235", group: "ФИЛ-24-EN",
+    faculty: "Факультет зарубежной филологии",
+    specialty: "Зарубежная литература и перевод (6B02301)",
+    course: 1, form: "Очная, международный обмен",
+    email: "m.twain@damqor.edu", phone: "+7 (701) 555-01-05",
+    advisor: "Ким Роман Сергеевич",
+  },
+];
 
 const COURSES = [
   { id: "c1", title: "Базы данных", teacher: "Сатпаева А.К.", credits: 5, color: "cyan",
@@ -394,10 +449,18 @@ const TEACHER_NAV_ITEMS = [
 
 /* ============================== ГЛАВНЫЙ КОМПОНЕНТ ============================== */
 
+const AUTHOR_DISPLAY_NAMES = {
+  ArthurConanDoyle: "Arthur Conan Doyle",
+  EdgarAllanPoe: "Edgar Allan Poe",
+  "H.G.Wells": "H.G. Wells",
+  JackLondon: "Jack London",
+  MarkTwain: "Mark Twain",
+};
+
 export default function App() {
   const [loggedIn, setLoggedIn] = useState(false);
-  const [role, setRole] = useState("student"); // 'student' | 'teacher' | 'engine'
-  const [engineAccount, setEngineAccount] = useState(null);
+  const [role, setRole] = useState("student"); // 'student' | 'teacher'
+  const [currentStudent, setCurrentStudent] = useState(null);
   const [activeTab, setActiveTab] = useState("home");
   const [selectedCourseId, setSelectedCourseId] = useState(null);
   const [selectedAssignmentId, setSelectedAssignmentId] = useState(null);
@@ -421,13 +484,60 @@ export default function App() {
     setActiveTab("assignments");
   };
 
-  // Запускает анализ Shyn сразу после сдачи работы студентом — имитирует
-  // реальный флоу: POST /submit → job_id → polling → отчёт (см. shynClient.js)
-  const handleSubmitted = (assignmentId) => {
+  // Запускает анализ Shyn сразу после сдачи работы студентом.
+  //
+  // ВАЖНАЯ РАЗВИЛКА: если у вошедшего студента задан expectedAuthor (это
+  // один из пяти "авторских" аккаунтов - см. STUDENT_ACCOUNTS), мы вызываем
+  // РЕАЛЬНЫЙ Shyn API (api_analyze.py, настоящая обученная модель) - для
+  // них сравнение со стилем осмысленно, потому что модель действительно
+  // обучена на этих пяти авторах. Для обычного студента (Нурлан,
+  // expectedAuthor = null) у реальной модели попросту нет эталона "его
+  // личного стиля" - для него используется мок-клиент shynClient.js,
+  // сравнивающий с историей ЕГО ЖЕ прошлых работ (другая, гипотетическая
+  // концепция, которую реальный бэкенд пока не реализует).
+  const handleSubmitted = (assignmentId, submission) => {
     setShynReports((prev) => ({ ...prev, [assignmentId]: "loading" }));
+
+    if (currentStudent?.expectedAuthor) {
+      const file = submission?.files?.[0]?.raw || null;
+      const text = file ? "" : (submission?.text || "");
+      realAnalyzeSubmission({ file, text, expectedAuthor: currentStudent.expectedAuthor })
+        .then((api) => {
+          setShynReports((prev) => ({
+            ...prev,
+            [assignmentId]: {
+              source: "real",
+              status: "ready",
+              expectedAuthor: api.expectedAuthor,
+              docStyleScore: api.docStyleScore,
+              docStyleTier: api.docStyleTier,
+              docAiScore: api.docAiScore,
+              docAiTier: api.docAiTier,
+              styleReliable: api.styleReliable,
+              totalParagraphs: api.totalParagraphs,
+              flaggedParagraphs: api.flaggedParagraphs,
+              paragraphs: api.paragraphs,
+              modelInfo: api.modelInfo,
+              disclaimer:
+                "Это вспомогательный индикатор для преподавателя. Он не является " +
+                "автоматическим обвинением и не должен использоваться как " +
+                "единственное основание для решения — финальный вердикт всегда " +
+                "выносит преподаватель.",
+            },
+          }));
+        })
+        .catch((e) => {
+          setShynReports((prev) => ({
+            ...prev,
+            [assignmentId]: { source: "real", status: "error", message: e.message },
+          }));
+        });
+      return;
+    }
+
     const priorWorksCount = assignments.filter((a) => a.submission).length; // растущая история сдач
-    analyzeSubmission({ submissionId: assignmentId, priorWorksCount, profile: "high" }).then((report) => {
-      setShynReports((prev) => ({ ...prev, [assignmentId]: report }));
+    mockAnalyzeSubmission({ submissionId: assignmentId, priorWorksCount, profile: "high" }).then((report) => {
+      setShynReports((prev) => ({ ...prev, [assignmentId]: { source: "mock", ...report } }));
     });
   };
 
@@ -436,7 +546,15 @@ export default function App() {
     if (!report || report === "loading") return;
     setReportView({
       report,
-      context: { assignmentTitle: assignment.title, courseTitle: courseById(assignment.courseId)?.title },
+      context: {
+        studentName: currentStudent?.fullName,
+        studentEmail: currentStudent?.email,
+        assignmentTitle: assignment.title,
+        courseTitle: courseById(assignment.courseId)?.title,
+        expectedAuthorDisplay: currentStudent?.expectedAuthor
+          ? AUTHOR_DISPLAY_NAMES[currentStudent.expectedAuthor]
+          : null,
+      },
       isTeacher: false,
     });
   };
@@ -446,6 +564,7 @@ export default function App() {
       report: row.report,
       context: {
         studentName: row.studentName,
+        studentEmail: row.studentEmail,
         assignmentTitle: "Задание 2: Верстка адаптивной страницы",
         courseTitle: "Web-программирование",
       },
@@ -456,34 +575,12 @@ export default function App() {
   if (!loggedIn) {
     return (
       <LoginScreen
-        onLogin={(chosenRole, extra) => {
+        onLogin={(chosenRole, account) => {
           setRole(chosenRole);
-          if (chosenRole === "engine") setEngineAccount(extra);
+          if (chosenRole === "student") setCurrentStudent(account);
           setLoggedIn(true);
         }}
       />
-    );
-  }
-
-  if (role === "engine" && engineAccount) {
-    return (
-      <div className="min-h-screen w-full bg-slate-50 text-slate-900">
-        <header className="sticky top-0 z-10 bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Logo size={26} />
-            <span className="text-sm font-bold">{UNIVERSITY.shortName} · Технический прогон Shyndyq</span>
-          </div>
-          <button
-            onClick={() => { setLoggedIn(false); setEngineAccount(null); }}
-            className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800"
-          >
-            <LogOut size={15} /> Выйти
-          </button>
-        </header>
-        <main className="p-4 sm:p-6 max-w-3xl w-full mx-auto">
-          <AuthorEngineView account={engineAccount} />
-        </main>
-      </div>
     );
   }
 
@@ -525,11 +622,11 @@ export default function App() {
         <div className="border-t border-slate-800 p-3">
           <div className="flex items-center gap-3 px-2 py-2 rounded-lg">
             <div className="w-9 h-9 rounded-full bg-amber-400 text-slate-900 font-bold flex items-center justify-center text-sm shrink-0">
-              {role === "teacher" ? "КР" : "НА"}
+              {role === "teacher" ? "КР" : currentStudent?.initials}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-xs font-semibold truncate">{role === "teacher" ? TEACHER.fullName.split(" ")[0] + " " + TEACHER.fullName.split(" ")[1] : STUDENT.firstName + " Ахметов"}</div>
-              <div className="text-[11px] text-slate-400 truncate">{role === "teacher" ? TEACHER.department : STUDENT.group}</div>
+              <div className="text-xs font-semibold truncate">{role === "teacher" ? TEACHER.fullName.split(" ")[0] + " " + TEACHER.fullName.split(" ")[1] : currentStudent?.fullName}</div>
+              <div className="text-[11px] text-slate-400 truncate">{role === "teacher" ? TEACHER.department : currentStudent?.group}</div>
             </div>
           </div>
           <button
@@ -567,11 +664,12 @@ export default function App() {
               isTeacher={reportView.isTeacher}
               onBack={() => setReportView(null)}
               onAction={() => setReportView(null)}
+              teacherName={TEACHER.fullName}
             />
           )}
 
           {!reportView && role === "student" && activeTab === "home" && (
-            <Dashboard assignments={assignments} onOpenAssignment={goToAssignment} onGoTo={setActiveTab} />
+            <Dashboard assignments={assignments} onOpenAssignment={goToAssignment} onGoTo={setActiveTab} student={currentStudent} />
           )}
 
           {!reportView && role === "student" && activeTab === "courses" && !selectedCourse && (
@@ -605,7 +703,7 @@ export default function App() {
 
           {!reportView && role === "student" && activeTab === "grades" && <Grades assignments={assignments} />}
           {!reportView && role === "student" && activeTab === "announcements" && <Announcements />}
-          {!reportView && activeTab === "profile" && <Profile role={role} />}
+          {!reportView && activeTab === "profile" && <Profile role={role} student={currentStudent} />}
 
           {!reportView && role === "teacher" && activeTab === "review" && (
             <TeacherDashboard onOpenReport={openTeacherReport} />
@@ -619,16 +717,13 @@ export default function App() {
 /* ============================== ЭКРАН ВХОДА ============================== */
 
 function LoginScreen({ onLogin }) {
-  const [loginRole, setLoginRole] = useState("student"); // 'student' | 'teacher' | 'engine'
+  const [loginRole, setLoginRole] = useState("student"); // 'student' | 'teacher'
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const CREDS = {
-    student: { login: "n.akhmetov", password: "student2026" },
-    teacher: { login: "r.kim", password: "teacher2026" },
-  };
+  const TEACHER_CREDS = { login: "r.kim", password: "teacher2026" };
 
   const submit = (e) => {
     e.preventDefault();
@@ -637,26 +732,25 @@ function LoginScreen({ onLogin }) {
       return;
     }
 
-    if (loginRole === "engine") {
-      const acc = AUTHOR_ACCOUNTS.find((a) => a.login === username.trim().toLowerCase());
+    if (loginRole === "student") {
+      const acc = STUDENT_ACCOUNTS.find((a) => a.login === username.trim().toLowerCase());
       if (!acc || password !== acc.password) {
         setError("Неверный логин или пароль. Проверьте тестовые данные ниже.");
         return;
       }
       setError("");
       setLoading(true);
-      setTimeout(() => { setLoading(false); onLogin("engine", acc); }, 500);
+      setTimeout(() => { setLoading(false); onLogin("student", acc); }, 500);
       return;
     }
 
-    const c = CREDS[loginRole];
-    if (username.trim().toLowerCase() !== c.login || password !== c.password) {
+    if (username.trim().toLowerCase() !== TEACHER_CREDS.login || password !== TEACHER_CREDS.password) {
       setError("Неверный логин или пароль. Проверьте тестовые данные ниже.");
       return;
     }
     setError("");
     setLoading(true);
-    setTimeout(() => { setLoading(false); onLogin(loginRole); }, 500);
+    setTimeout(() => { setLoading(false); onLogin("teacher", null); }, 500);
   };
 
   return (
@@ -684,7 +778,7 @@ function LoginScreen({ onLogin }) {
           <h3 className="text-xl font-bold text-slate-900">Вход в личный кабинет</h3>
           <p className="text-sm text-slate-500 mt-1">Демо-платформа — выберите роль для входа.</p>
 
-          <div className="mt-4 grid grid-cols-3 gap-2 p-1 bg-slate-100 rounded-lg">
+          <div className="mt-4 grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-lg">
             <button
               type="button"
               onClick={() => { setLoginRole("student"); setUsername(""); setPassword(""); setError(""); }}
@@ -699,25 +793,18 @@ function LoginScreen({ onLogin }) {
             >
               <GraduationCap size={14} /> Преподаватель
             </button>
-            <button
-              type="button"
-              onClick={() => { setLoginRole("engine"); setUsername(""); setPassword(""); setError(""); }}
-              className={`flex items-center justify-center gap-1.5 text-xs font-semibold py-2 rounded-md transition-colors ${loginRole === "engine" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
-            >
-              <Sparkles size={14} /> Движок
-            </button>
           </div>
 
-          {loginRole === "engine" && (
+          {loginRole === "student" && (
             <div className="mt-3 flex flex-wrap gap-1.5">
-              {AUTHOR_ACCOUNTS.map((a) => (
+              {STUDENT_ACCOUNTS.map((a) => (
                 <button
                   key={a.login}
                   type="button"
                   onClick={() => { setUsername(a.login); setPassword(a.password); setError(""); }}
-                  className="text-[11px] font-medium px-2.5 py-1 rounded-full border border-slate-200 text-slate-600 hover:border-violet-300 hover:text-violet-700 transition-colors"
+                  className="text-[11px] font-medium px-2.5 py-1 rounded-full border border-slate-200 text-slate-600 hover:border-cyan-300 hover:text-cyan-700 transition-colors"
                 >
-                  {a.displayName}
+                  {a.firstName}
                 </button>
               ))}
             </div>
@@ -731,7 +818,7 @@ function LoginScreen({ onLogin }) {
                 <input
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder={loginRole === "engine" ? "a.doyle" : CREDS[loginRole].login}
+                  placeholder={loginRole === "student" ? STUDENT_ACCOUNTS[0].login : TEACHER_CREDS.login}
                   className="w-full pl-10 pr-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
                 />
               </div>
@@ -767,8 +854,8 @@ function LoginScreen({ onLogin }) {
           <button
             type="button"
             onClick={() => {
-              if (loginRole === "engine") { setUsername(AUTHOR_ACCOUNTS[0].login); setPassword(AUTHOR_ACCOUNTS[0].password); return; }
-              setUsername(CREDS[loginRole].login); setPassword(CREDS[loginRole].password);
+              if (loginRole === "student") { setUsername(STUDENT_ACCOUNTS[0].login); setPassword(STUDENT_ACCOUNTS[0].password); return; }
+              setUsername(TEACHER_CREDS.login); setPassword(TEACHER_CREDS.password);
             }}
             className="mt-4 text-xs text-cyan-700 hover:underline"
           >
@@ -787,7 +874,7 @@ function LoginScreen({ onLogin }) {
 
 /* ============================== ГЛАВНАЯ (DASHBOARD) ============================== */
 
-function Dashboard({ assignments, onOpenAssignment, onGoTo }) {
+function Dashboard({ assignments, onOpenAssignment, onGoTo, student }) {
   const upcoming = useMemo(() => {
     return assignments
       .filter((a) => effectiveStatus(a) !== "graded")
@@ -809,9 +896,9 @@ function Dashboard({ assignments, onOpenAssignment, onGoTo }) {
     <div className="space-y-6">
       <div className="bg-gradient-to-r from-slate-900 to-cyan-900 rounded-2xl p-6 text-white">
         <p className="text-slate-300 text-sm">Добро пожаловать,</p>
-        <h2 className="text-2xl font-bold mt-0.5">{STUDENT.firstName}!</h2>
+        <h2 className="text-2xl font-bold mt-0.5">{student.firstName}!</h2>
         <p className="text-slate-300 text-sm mt-2 max-w-xl">
-          Группа {STUDENT.group} · {STUDENT.specialty}. Хорошего учебного дня — не забудьте о ближайших дедлайнах ниже.
+          Группа {student.group} · {student.specialty}. Хорошего учебного дня — не забудьте о ближайших дедлайнах ниже.
         </p>
       </div>
 
@@ -1279,6 +1366,7 @@ function AssignmentDetail({ assignment, shynReport, onBack, onUpdate, onSubmitte
     const list = Array.from(e.target.files || []).map((f) => ({
       name: f.name,
       size: f.size > 1024 * 1024 ? `${(f.size / (1024 * 1024)).toFixed(1)} МБ` : `${Math.max(1, Math.round(f.size / 1024))} КБ`,
+      raw: f, // настоящий File - нужен, если сдача пойдёт в реальный Shyn API
     }));
     setFiles((prev) => [...prev, ...list]);
   };
@@ -1299,7 +1387,7 @@ function AssignmentDetail({ assignment, shynReport, onBack, onUpdate, onSubmitte
         feedback: null,
         history: [...assignment.history, newHistoryEntry],
       });
-      onSubmitted?.(assignment.id);
+      onSubmitted?.(assignment.id, submission);
       setSubmitting(false);
       setJustSubmitted(true);
       setShowResubmitForm(false);
@@ -1598,7 +1686,7 @@ function Announcements() {
 
 /* ============================== ПРОФИЛЬ ============================== */
 
-function Profile({ role }) {
+function Profile({ role, student }) {
   if (role === "teacher") {
     const fields = [
       { label: "ФИО", value: TEACHER.fullName },
@@ -1627,26 +1715,27 @@ function Profile({ role }) {
     );
   }
 
-  const advisor = STUDENT.advisor;
+  if (!student) return null;
+
   const fields = [
-    { label: "ФИО", value: STUDENT.fullName },
-    { label: "Студенческий ID", value: STUDENT.studentId },
-    { label: "Группа", value: STUDENT.group },
-    { label: "Факультет", value: STUDENT.faculty },
-    { label: "Специальность", value: STUDENT.specialty },
-    { label: "Курс обучения", value: `${STUDENT.course} курс` },
-    { label: "Форма обучения", value: STUDENT.form },
-    { label: "Эдвайзер", value: advisor },
-    { label: "Email", value: STUDENT.email },
-    { label: "Телефон", value: STUDENT.phone },
+    { label: "ФИО", value: student.fullName },
+    { label: "Студенческий ID", value: student.studentId },
+    { label: "Группа", value: student.group },
+    { label: "Факультет", value: student.faculty },
+    { label: "Специальность", value: student.specialty },
+    { label: "Курс обучения", value: `${student.course} курс` },
+    { label: "Форма обучения", value: student.form },
+    { label: "Эдвайзер", value: student.advisor },
+    { label: "Email", value: student.email },
+    { label: "Телефон", value: student.phone },
   ];
   return (
     <div className="max-w-2xl">
       <div className="bg-white rounded-xl border border-slate-200 p-6 flex items-center gap-4">
-        <div className="w-16 h-16 rounded-full bg-amber-400 text-slate-900 font-extrabold text-xl flex items-center justify-center shrink-0">НА</div>
+        <div className="w-16 h-16 rounded-full bg-amber-400 text-slate-900 font-extrabold text-xl flex items-center justify-center shrink-0">{student.initials}</div>
         <div>
-          <h2 className="text-lg font-bold text-slate-900">{STUDENT.fullName}</h2>
-          <p className="text-sm text-slate-500">{STUDENT.specialty}</p>
+          <h2 className="text-lg font-bold text-slate-900">{student.fullName}</h2>
+          <p className="text-sm text-slate-500">{student.specialty}</p>
         </div>
       </div>
 

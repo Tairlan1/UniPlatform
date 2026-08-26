@@ -15,31 +15,37 @@ export const TEACHER = {
 export const ROSTER = [
   {
     id: "s1", studentName: "Ахметов Нурлан Ерланович", studentId: "21О-1147",
+    studentEmail: "n.akhmetov@damqor.edu",
     submittedAt: "23.08.2026, 20:14", grade: 85, maxScore: 100,
     reportSeed: "a3-s1", priorWorksCount: 5, profile: "high",
   },
   {
     id: "s2", studentName: "Сералиева Динара Асхатовна", studentId: "21О-1102",
+    studentEmail: "d.seralieva@damqor.edu",
     submittedAt: "23.08.2026, 18:02", grade: 91, maxScore: 100,
     reportSeed: "a3-s2", priorWorksCount: 6, profile: "high",
   },
   {
     id: "s3", studentName: "Садыков Ержан Болатович", studentId: "21О-1139",
+    studentEmail: "e.sadykov@damqor.edu",
     submittedAt: "24.08.2026, 09:47", grade: 78, maxScore: 100,
     reportSeed: "a3-s3", priorWorksCount: 4, profile: "mid",
   },
   {
     id: "s4", studentName: "Богданов Тимур Викторович", studentId: "21О-1155",
+    studentEmail: "t.bogdanov@damqor.edu",
     submittedAt: "24.08.2026, 23:51", grade: null, maxScore: 100,
     reportSeed: "a3-s4", priorWorksCount: 5, profile: "low",
   },
   {
     id: "s5", studentName: "Ли Виктор Сергеевич", studentId: "21О-1161",
+    studentEmail: "v.li@damqor.edu",
     submittedAt: "25.08.2026, 00:12", grade: null, maxScore: 100,
     reportSeed: "a3-s5", priorWorksCount: 4, profile: "flagged",
   },
   {
     id: "s6", studentName: "Нуртаева Аружан Кайратовна", studentId: "24П-0087",
+    studentEmail: "a.nurtaeva@damqor.edu",
     submittedAt: "24.08.2026, 21:30", grade: null, maxScore: 100,
     reportSeed: "a3-s6", priorWorksCount: 1, profile: "high", // переведена в этом семестре — истории почти нет
   },
