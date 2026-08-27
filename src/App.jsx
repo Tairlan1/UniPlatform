@@ -504,21 +504,23 @@ export default function App() {
       realAnalyzeSubmission({ file, text, expectedAuthor: currentStudent.expectedAuthor })
         .then((api) => {
           // ShyndyqBadge (компактный бейдж в шапке задания) написан под
-          // мок-формат отчёта и ждёт report.verdict / styleScore / aiScore.
-          // У "настоящего" API этих полей нет (только docAiTier и т.п.) -
-          // без этой нормализации VERDICT_META[undefined] роняет весь рендер
-          // (см. баг: "сдал работу -> выкинуло на localhost:5173 и пусто").
-          // Маппинг tier -> verdict — та же схема, что уже используется в
-          // обратную сторону в buildTeacherMailto ниже по файлу.
+          // мок-формат отчёта и ждёт verdict/styleScore/aiScore как ГОТОВЫЙ
+          // процент (0-100). "Настоящий" API отдаёт docStyleScore/docAiScore
+          // как ДОЛЮ (0-1) - без toPct бейдж показывал "0.99%" вместо "99%".
+          // Плюс: styleScore для бейджа гейтится ТЕМ ЖЕ правилом, что и
+          // полный отчёт (RealShyndyqReport) - при docAiTier==="red" реальный
+          // % не показывается нигде, включая компактный бейдж, а не только
+          // на полной странице отчёта.
           const verdict = api.docAiTier === "red" ? "red" : api.docAiTier === "yellow" ? "amber" : "green";
+          const toPct = (x) => (x === null || x === undefined ? null : Math.round(x * 10000) / 100);
           setShynReports((prev) => ({
             ...prev,
             [assignmentId]: {
               source: "real",
               status: "ready",
               verdict,
-              styleScore: api.docStyleScore,
-              aiScore: api.docAiScore,
+              styleScore: api.docAiTier === "red" ? "Н/Д" : (toPct(api.docStyleScore) ?? "н/д"),
+              aiScore: toPct(api.docAiScore),
               expectedAuthor: api.expectedAuthor,
               docStyleScore: api.docStyleScore,
               docStyleTier: api.docStyleTier,

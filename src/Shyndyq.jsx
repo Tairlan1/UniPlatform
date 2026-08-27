@@ -37,6 +37,24 @@ export function ShyndyqBadge({ report, loading, compact = false, onClick }) {
     return null;
   }
 
+  if (report.status === "error") {
+    // Реальный Shyn API (127.0.0.1:5001) недоступен - обычно потому, что
+    // "python3 api_analyze.py" в репозитории Shyn не запущен. Явно
+    // показываем это вместо тихого исчезновения бейджа - иначе на демо
+    // будет выглядеть так, будто проверка вообще не подключена.
+    return (
+      <span
+        title={report.message || "Не удалось связаться с Shyn API"}
+        className={`inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 ${compact ? "px-2 py-0.5" : "pl-2 pr-3 py-1"}`}
+      >
+        <ShieldAlert size={compact ? 10 : 12} className="text-red-500" />
+        <span className={`font-bold uppercase tracking-wider text-red-600 ${compact ? "text-[9px]" : "text-[11px]"}`}>
+          {compact ? "Shyndyq" : "Ошибка соединения"}
+        </span>
+      </span>
+    );
+  }
+
   if (report.status === "insufficient_data") {
     return (
       <span className={`inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 ${compact ? "px-2 py-0.5" : "pl-2 pr-3 py-1"}`}>
@@ -68,7 +86,7 @@ export function ShyndyqBadge({ report, loading, compact = false, onClick }) {
         onClick={clickable ? (e) => { e.stopPropagation(); onClick(); } : undefined}
         role={clickable ? "button" : undefined}
         className={`inline-flex items-center gap-1 rounded-full border ${meta.border} ${meta.bg} px-2 py-0.5 ${clickable ? "hover:brightness-95 cursor-pointer" : ""}`}
-        title={`Стиль ${report.styleScore}% · ИИ ${report.aiScore}%`}
+        title={`Стиль ${report.styleScore}${typeof report.styleScore === "number" ? "%" : ""} · ИИ ${report.aiScore}%`}
       >
         <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
         <span className="text-[9px] font-bold uppercase tracking-wider text-violet-700">Shyndyq</span>
@@ -88,7 +106,7 @@ export function ShyndyqBadge({ report, loading, compact = false, onClick }) {
       <span className="text-[11px] font-bold uppercase tracking-wider text-violet-700">Shyndyq</span>
       <span className="w-px h-3 bg-violet-200" />
       <span className="text-[11px] text-slate-500">
-        Стиль <span className="font-bold text-slate-800">{report.styleScore}%</span>
+        Стиль <span className="font-bold text-slate-800">{report.styleScore}{typeof report.styleScore === "number" ? "%" : ""}</span>
       </span>
       <span className="text-[11px] text-slate-500">
         ИИ <span className="font-bold text-slate-800">{report.aiScore}%</span>
