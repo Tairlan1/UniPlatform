@@ -606,7 +606,7 @@ export default function App() {
   return (
     <div className="min-h-screen w-full bg-slate-50 text-slate-900 flex">
       {/* Sidebar */}
-      <aside className={`fixed lg:static z-30 inset-y-0 left-0 w-64 bg-slate-900 text-slate-100 flex flex-col transition-transform duration-200 ${mobileNavOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}>
+      <aside className={`print:hidden fixed lg:static z-30 inset-y-0 left-0 w-64 bg-slate-900 text-slate-100 flex flex-col transition-transform duration-200 ${mobileNavOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}>
         <div className="flex items-center gap-3 px-5 py-5 border-b border-slate-800">
           <Logo size={38} className="shrink-0" />
           <div className="min-w-0">
@@ -659,7 +659,7 @@ export default function App() {
 
       {/* Main content */}
       <div className="flex-1 min-w-0 flex flex-col">
-        <header className="sticky top-0 z-10 bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex items-center justify-between">
+        <header className="print:hidden sticky top-0 z-10 bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0">
             <button className="lg:hidden p-2 -ml-2 rounded-md hover:bg-slate-100" onClick={() => setMobileNavOpen(true)}>
               <ClipboardList size={20} />

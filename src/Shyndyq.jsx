@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import {
   Sparkles, ChevronLeft, Info, ShieldAlert, ShieldCheck, ShieldQuestion, Loader2,
-  Mail, AlertTriangle,
+  Mail, AlertTriangle, Printer, FileText,
 } from "lucide-react";
 
 /* ============================== ВИЗУАЛЬНЫЕ ТОКЕНЫ ВЕРДИКТА ============================== */
@@ -157,6 +157,16 @@ const TIER_META = {
   neutral: { cls: "bg-slate-50 border-slate-200", dot: "bg-slate-300", text: "text-slate-500" },
 };
 
+// Тот же светофор, но для крупных сводных карточек шапки отчёта (не для
+// мелких фрагментов подсветки) - более насыщенный акцент на цифре,
+// чтобы вердикт был виден с одного взгляда, а не только по мелкому лейблу.
+const CARD_TIER_META = {
+  green: { cls: "bg-emerald-50 border-emerald-300", num: "text-emerald-700", icon: ShieldCheck, iconCls: "text-emerald-500" },
+  yellow: { cls: "bg-amber-50 border-amber-300", num: "text-amber-700", icon: ShieldQuestion, iconCls: "text-amber-500" },
+  red: { cls: "bg-red-50 border-red-300", num: "text-red-700", icon: ShieldAlert, iconCls: "text-red-500" },
+  neutral: { cls: "bg-slate-50 border-slate-200", num: "text-slate-400", icon: Info, iconCls: "text-slate-400" },
+};
+
 function pct(x) { return x === null || x === undefined ? null : Math.round(x * 1000) / 10; }
 
 function ParagraphHighlight({ p, mode }) {
@@ -293,28 +303,52 @@ function RealShyndyqReport({ report, context, isTeacher, onBack, onAction, teach
 
   return (
     <div>
-      <button onClick={onBack} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 mb-4">
-        <ChevronLeft size={16} /> Назад
-      </button>
+      <div className="flex items-center justify-between mb-4">
+        <button onClick={onBack} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800">
+          <ChevronLeft size={16} /> Назад
+        </button>
+        <button
+          onClick={() => window.print()}
+          className="print:hidden flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 border border-slate-200 rounded-lg px-3 py-1.5"
+        >
+          <Printer size={14} /> Печать / сохранить как PDF
+        </button>
+      </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden print:border-slate-400 print:shadow-none">
         <div className="p-5 sm:p-6 border-b border-slate-100">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="w-6 h-6 rounded-full bg-violet-600 flex items-center justify-center shrink-0">
-                  <Sparkles size={13} className="text-white" />
-                </span>
-                <h2 className="text-lg font-bold text-slate-900">Отчёт Shyndyq</h2>
+            <div className="flex items-start gap-3">
+              <span className="w-9 h-9 rounded-lg bg-slate-900 flex items-center justify-center shrink-0 mt-0.5">
+                <FileText size={17} className="text-white" />
+              </span>
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Автоматизированная проверка · Shyndyq</p>
+                <h2 className="text-lg font-bold text-slate-900 leading-tight">Отчёт о проверке авторского стиля и оригинальности</h2>
               </div>
-              {context && (
-                <p className="text-xs text-slate-500 mt-1.5">
-                  {context.studentName && <>{context.studentName} · </>}
-                  {context.assignmentTitle} {context.courseTitle && <>· {context.courseTitle}</>}
-                </p>
-              )}
             </div>
           </div>
+
+          {context && (
+            <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2 mt-4 pt-4 border-t border-slate-100 text-xs">
+              <div>
+                <dt className="text-slate-400 uppercase tracking-wide text-[10px] font-semibold">Студент</dt>
+                <dd className="text-slate-800 font-medium mt-0.5">{context.studentName || "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-slate-400 uppercase tracking-wide text-[10px] font-semibold">Дисциплина</dt>
+                <dd className="text-slate-800 font-medium mt-0.5">{context.courseTitle || "—"}</dd>
+              </div>
+              <div className="col-span-2 sm:col-span-1">
+                <dt className="text-slate-400 uppercase tracking-wide text-[10px] font-semibold">Задание</dt>
+                <dd className="text-slate-800 font-medium mt-0.5">{context.assignmentTitle || "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-slate-400 uppercase tracking-wide text-[10px] font-semibold">Эталонный стиль</dt>
+                <dd className="text-slate-800 font-medium mt-0.5">{context.expectedAuthorDisplay || "—"}</dd>
+              </div>
+            </dl>
+          )}
 
           {/* Тревожный баннер - ЖЁСТКИЙ (красный) только при доказанном ИИ,
               МЯГКИЙ (жёлтый, без обвинения) при неоднозначных признаках. */}
@@ -336,22 +370,56 @@ function RealShyndyqReport({ report, context, isTeacher, onBack, onAction, teach
               </div>
             </div>
           )}
+          {/* Стиль не совпал, но это НЕ признак ИИ (aiTier не red) - мягкая
+              информационная строка, а не тревога: несовпадение стиля само
+              по себе означает лишь "текст не похож на этого автора", это
+              обычное дело и не повод для подозрений. */}
+          {aiTier !== "red" && report.docStyleTier === "red" && (
+            <div className="mt-4 flex items-start gap-2.5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+              <Info size={18} className="text-slate-400 shrink-0 mt-0.5" />
+              <div className="text-sm text-slate-600">
+                Стиль текста статистически отличается от {context?.expectedAuthorDisplay || "эталонного автора"} —
+                само по себе это не признак ИИ или недобросовестности, просто студент не воспроизвёл
+                авторскую манеру письма в этой работе.
+              </div>
+            </div>
+          )}
 
           <div className="grid sm:grid-cols-2 gap-3 mt-5">
-            <div className="rounded-xl border border-slate-200 p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Совпадение со стилем {context?.expectedAuthorDisplay || "автора"}</p>
-              <p className="text-3xl font-extrabold text-slate-900 mt-1">
-                {aiTier === "red" ? "Н/Д" : (stylePct !== null ? `${stylePct}%` : "н/д")}
-              </p>
-              <p className="text-[11px] text-slate-400 mt-1">
-                {aiTier === "red" ? "Не показывается — см. баннер выше" : "Модель атрибуции стиля (5 известных авторов)"}
-              </p>
-            </div>
-            <div className="rounded-xl border border-slate-200 p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">AI Detection</p>
-              <p className="text-3xl font-extrabold text-slate-900 mt-1">{aiPct}%</p>
-              <p className="text-[11px] text-slate-400 mt-1">{report.flaggedParagraphs} из {report.totalParagraphs} фрагментов отмечены</p>
-            </div>
+            {(() => {
+              const styleMeta = aiTier === "red" ? CARD_TIER_META.neutral : (CARD_TIER_META[report.docStyleTier] || CARD_TIER_META.neutral);
+              const StyleIcon = styleMeta.icon;
+              return (
+                <div className={`rounded-xl border-2 p-4 ${styleMeta.cls}`}>
+                  <div className="flex items-center gap-1.5">
+                    <StyleIcon size={13} className={styleMeta.iconCls} />
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      Совпадение со стилем {context?.expectedAuthorDisplay || "автора"}
+                    </p>
+                  </div>
+                  <p className={`text-3xl font-extrabold mt-1 ${styleMeta.num}`}>
+                    {aiTier === "red" ? "Н/Д" : (stylePct !== null ? `${stylePct}%` : "н/д")}
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    {aiTier === "red" ? "Не показывается — см. предупреждение выше" : "Модель атрибуции стиля (5 известных авторов)"}
+                  </p>
+                </div>
+              );
+            })()}
+            {(() => {
+              const aiMeta = CARD_TIER_META[aiTier] || CARD_TIER_META.neutral;
+              const AiIcon = aiMeta.icon;
+              return (
+                <div className={`rounded-xl border-2 p-4 ${aiMeta.cls}`}>
+                  <div className="flex items-center gap-1.5">
+                    <AiIcon size={13} className={aiMeta.iconCls} />
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">AI Detection</p>
+                  </div>
+                  <p className={`text-3xl font-extrabold mt-1 ${aiMeta.num}`}>{aiPct}%</p>
+                  <p className="text-[11px] text-slate-400 mt-1">{report.flaggedParagraphs} из {report.totalParagraphs} фрагментов отмечены</p>
+                </div>
+              );
+            })()}
           </div>
         </div>
 
