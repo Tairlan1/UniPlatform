@@ -360,6 +360,26 @@ function RealShyndyqReport({ report, context, isTeacher, onBack, onAction, teach
           <span>{report.disclaimer}</span>
         </div>
 
+        {/* Честный блок доверия по длине текста - использует held-out
+            метрики ПО МАСШТАБУ фрагмента (train_model.py build-multiscale +
+            compare_models.py), а не общую точность модели "в среднем".
+            Не показываем, если style% и так скрыт гейтингом (aiTier=red) -
+            нет смысла обсуждать доверие к числу, которого нет на экране. */}
+        {styleReliable && report.confidence && (
+          <div className="mx-5 sm:mx-6 mt-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-1">
+              Насколько можно доверять этой оценке?
+            </p>
+            <p className="text-sm text-slate-700 leading-relaxed">
+              Текст — это <b>{report.confidence.bandLabel}</b>{report.wordCount ? ` (${report.wordCount} слов)` : ""}.{" "}
+              {report.confidence.text}
+              {report.confidence.accuracyPct !== null && report.confidence.accuracyPct !== undefined && (
+                <span className="text-slate-400"> (на проверочных текстах такой же длины — верно в {report.confidence.accuracyPct}% случаев)</span>
+              )}
+            </p>
+          </div>
+        )}
+
         {/* Подсветка по абзацам - две вкладки, ПОЛНОСТЬЮ независимые
             (см. комментарий у TIER_META выше). */}
         <div className="p-5 sm:p-6">

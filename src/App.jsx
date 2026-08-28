@@ -531,6 +531,8 @@ export default function App() {
               flaggedParagraphs: api.flaggedParagraphs,
               paragraphs: api.paragraphs,
               modelInfo: api.modelInfo,
+              confidence: api.confidence,
+              wordCount: api.wordCount,
               disclaimer:
                 "Это вспомогательный индикатор для преподавателя. Он не является " +
                 "автоматическим обвинением и не должен использоваться как " +
