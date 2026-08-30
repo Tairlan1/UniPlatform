@@ -5,6 +5,13 @@
  * api_analyze.py по HTTP и возвращает то, что реально вернула обученная
  * модель — без предвычислений на стороне фронтенда.
  *
+ * Адрес API берётся из переменной окружения VITE_SHYN_API_BASE (см. .env.example) -
+ * ЭТО ВАЖНО для реального развёртывания в вузе: на каждом сервере/машине
+ * api_analyze.py может слушать другой адрес, и раньше это было зашито прямо
+ * в код (http://127.0.0.1:5001), из-за чего для каждой инсталляции
+ * пришлось бы редактировать исходники. Если переменная не задана - для
+ * удобства локальной разработки используется тот же адрес по умолчанию.
+ *
  * Чтобы это заработало у вас локально:
  *   1) в репозитории Shyn:  pip install flask flask-cors --break-system-packages
  *                            python3 api_analyze.py
@@ -12,9 +19,13 @@
  *   2) в репозитории UniPlatform:  npm run dev
  *      (Vite dev-сервер по умолчанию слушает http://localhost:5173,
  *       CORS на бэкенде уже открыт)
+ *
+ * Для боевого развёртывания: скопируйте .env.example в .env.production и
+ * укажите реальный адрес сервера Shyn, например:
+ *   VITE_SHYN_API_BASE=https://shyn.damqor.edu
  */
 
-export const SHYN_API_BASE = "http://127.0.0.1:5001";
+export const SHYN_API_BASE = import.meta.env.VITE_SHYN_API_BASE || "http://127.0.0.1:5001";
 
 export class ShynApiError extends Error {}
 
