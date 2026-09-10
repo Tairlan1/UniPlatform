@@ -3,10 +3,13 @@ import {
   Sparkles, ChevronLeft, Info, ShieldAlert, ShieldCheck, ShieldQuestion, Loader2,
   Mail, AlertTriangle, Printer, FileText,
 } from "lucide-react";
+import type {
+  ShynParagraph, ShynReportContext, ShynReportEntry, ShynTier, ShynVerdict, TeacherAction,
+} from "./types";
 
 /* ============================== ВИЗУАЛЬНЫЕ ТОКЕНЫ ВЕРДИКТА ============================== */
 
-const VERDICT_META = {
+const VERDICT_META: Record<ShynVerdict, { label: string; dot: string; text: string; bg: string; border: string; ring: string }> = {
   green: { label: "Соответствует", dot: "bg-emerald-500", text: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200", ring: "ring-emerald-500" },
   amber: { label: "Есть расхождения", dot: "bg-amber-500", text: "text-amber-700", bg: "bg-amber-50", border: "border-amber-200", ring: "ring-amber-500" },
   red: { label: "Требует внимания", dot: "bg-red-500", text: "text-red-700", bg: "bg-red-50", border: "border-red-200", ring: "ring-red-500" },
@@ -14,13 +17,20 @@ const VERDICT_META = {
 
 /* ============================== БЕЙДЖ (в списке / в шапке задания) ============================== */
 
+interface ShyndyqBadgeProps {
+  report: ShynReportEntry | null | undefined;
+  loading?: boolean;
+  compact?: boolean;
+  onClick?: () => void;
+}
+
 /**
  * report: результат shynClient.buildReport(...) | null (если проверка ещё не запускалась)
  * loading: идёт анализ прямо сейчас (после сдачи работы)
  * onClick: переход на полный отчёт (недоступен, пока нет отчёта)
  */
-export function ShyndyqBadge({ report, loading, compact = false, onClick }) {
-  const clickable = !!(onClick && report && report.status === "ready");
+export function ShyndyqBadge({ report, loading, compact = false, onClick }: ShyndyqBadgeProps) {
+  const clickable = !!(onClick && report && typeof report === "object" && report.status === "ready");
 
   if (loading) {
     return (
@@ -33,7 +43,7 @@ export function ShyndyqBadge({ report, loading, compact = false, onClick }) {
     );
   }
 
-  if (!report) {
+  if (!report || report === "loading") {
     return null;
   }
 
@@ -68,29 +78,27 @@ export function ShyndyqBadge({ report, loading, compact = false, onClick }) {
 
   const meta = VERDICT_META[report.verdict];
   if (!meta) {
-    // Неизвестный/отсутствующий verdict (например report.status === "error",
-    // либо источник отчёта не был приведён к ожидаемой форме) - не роняем
-    // рендер всего приложения, просто не показываем бейдж.
+    // Неизвестный/отсутствующий verdict - не роняем рендер всего приложения,
+    // просто не показываем бейдж.
     return null;
   }
-  const Icon = report.verdict === "green" ? ShieldCheck : report.verdict === "amber" ? ShieldAlert : ShieldAlert;
+  const Icon = report.verdict === "green" ? ShieldCheck : ShieldAlert;
 
   // compact: используется внутри строк списков, которые сами по себе часто
   // кликабельны — рендерим как <span>, а не <button>, чтобы не вкладывать
   // интерактивные элементы друг в друга; клик наружу (если передан onClick)
   // всё равно навигирует через stopPropagation на span.
   if (compact) {
-    const Tag = clickable ? "span" : "span";
     return (
-      <Tag
-        onClick={clickable ? (e) => { e.stopPropagation(); onClick(); } : undefined}
+      <span
+        onClick={clickable ? (e) => { e.stopPropagation(); onClick?.(); } : undefined}
         role={clickable ? "button" : undefined}
         className={`inline-flex items-center gap-1 rounded-full border ${meta.border} ${meta.bg} px-2 py-0.5 ${clickable ? "hover:brightness-95 cursor-pointer" : ""}`}
         title={`Стиль ${report.styleScore}${typeof report.styleScore === "number" ? "%" : ""} · ИИ ${report.aiScore}%`}
       >
         <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
         <span className="text-[9px] font-bold uppercase tracking-wider text-violet-700">Shyndyq</span>
-      </Tag>
+      </span>
     );
   }
 
@@ -118,7 +126,13 @@ export function ShyndyqBadge({ report, loading, compact = false, onClick }) {
 
 /* ============================== ПОЛОСКА МЕТРИКИ (baseline vs текущая работа) ============================== */
 
-function MetricBar({ label, baseline, current }) {
+interface MetricBarProps {
+  label: string;
+  baseline: number;
+  current: number;
+}
+
+function MetricBar({ label, baseline, current }: MetricBarProps) {
   const delta = current - baseline;
   const deltaAbs = Math.abs(delta);
   const deltaColor = deltaAbs <= 8 ? "text-emerald-600" : deltaAbs <= 20 ? "text-amber-600" : "text-red-600";
@@ -150,7 +164,9 @@ function MetricBar({ label, baseline, current }) {
    (Flask-версии): "Авторский стиль" и "AI Detection" никогда не смешиваются
    в одной покраске одного фрагмента. */
 
-const TIER_META = {
+type TierKey = Exclude<ShynTier, null> | "neutral";
+
+const TIER_META: Record<TierKey, { cls: string; dot: string; text: string }> = {
   green: { cls: "bg-emerald-50 border-emerald-200", dot: "bg-emerald-500", text: "text-emerald-800" },
   yellow: { cls: "bg-amber-50 border-amber-200", dot: "bg-amber-500", text: "text-amber-800" },
   red: { cls: "bg-red-50 border-red-200", dot: "bg-red-500", text: "text-red-800" },
@@ -160,16 +176,23 @@ const TIER_META = {
 // Тот же светофор, но для крупных сводных карточек шапки отчёта (не для
 // мелких фрагментов подсветки) - более насыщенный акцент на цифре,
 // чтобы вердикт был виден с одного взгляда, а не только по мелкому лейблу.
-const CARD_TIER_META = {
+const CARD_TIER_META: Record<TierKey, { cls: string; num: string; icon: React.ComponentType<{ size?: number; className?: string }>; iconCls: string }> = {
   green: { cls: "bg-emerald-50 border-emerald-300", num: "text-emerald-700", icon: ShieldCheck, iconCls: "text-emerald-500" },
   yellow: { cls: "bg-amber-50 border-amber-300", num: "text-amber-700", icon: ShieldQuestion, iconCls: "text-amber-500" },
   red: { cls: "bg-red-50 border-red-300", num: "text-red-700", icon: ShieldAlert, iconCls: "text-red-500" },
   neutral: { cls: "bg-slate-50 border-slate-200", num: "text-slate-400", icon: Info, iconCls: "text-slate-400" },
 };
 
-function pct(x) { return x === null || x === undefined ? null : Math.round(x * 1000) / 10; }
+function pct(x: number | null | undefined): number | null {
+  return x === null || x === undefined ? null : Math.round(x * 1000) / 10;
+}
 
-function ParagraphHighlight({ p, mode }) {
+interface ParagraphHighlightProps {
+  p: ShynParagraph;
+  mode: "style" | "ai" | "disabled";
+}
+
+function ParagraphHighlight({ p, mode }: ParagraphHighlightProps) {
   if (mode === "disabled") {
     const meta = TIER_META.neutral;
     return (
@@ -185,7 +208,7 @@ function ParagraphHighlight({ p, mode }) {
     );
   }
   const tier = mode === "style" ? p.styleTier : p.aiTier;
-  const meta = TIER_META[tier] || TIER_META.neutral;
+  const meta = (tier && TIER_META[tier]) || TIER_META.neutral;
   const score = mode === "style" ? pct(p.styleScore) : pct(p.aiScore);
   return (
     <div className={`rounded-lg border px-3.5 py-3 ${meta.cls}`}>
@@ -205,15 +228,23 @@ function ParagraphHighlight({ p, mode }) {
   );
 }
 
+interface BuildTeacherMailtoParams {
+  studentEmail?: string | null;
+  studentName?: string | null;
+  assignmentTitle?: string | null;
+  docAiTier: ShynTier;
+  teacherName?: string | null;
+}
+
 /** Готовит mailto-ссылку с нейтральной, неосуждающей формулировкой — тон
  * зависит от уровня (red/yellow/green), но НИКОГДА не формулируется как
  * обвинение: инструмент лишь просит о встрече, решение остаётся за
  * преподавателем (см. также справку для комиссии). */
-function buildTeacherMailto({ studentEmail, studentName, assignmentTitle, docAiTier, teacherName }) {
+function buildTeacherMailto({ studentEmail, studentName, assignmentTitle, docAiTier, teacherName }: BuildTeacherMailtoParams): string {
   const name = studentName || "коллега";
   const title = assignmentTitle || "вашей работе";
   let subject = `По работе «${title}»`;
-  let body;
+  let body: string;
   if (docAiTier === "red") {
     subject = `Нужно обсудить вашу работу «${title}»`;
     body = `Добрый день, ${name}!\n\n` +
@@ -234,7 +265,13 @@ function buildTeacherMailto({ studentEmail, studentName, assignmentTitle, docAiT
   return `mailto:${studentEmail || ""}?${params.toString().replace(/\+/g, "%20")}`;
 }
 
-function TeacherDecisionBlock({ onAction, mailtoHref, hasEmail }) {
+interface TeacherDecisionBlockProps {
+  onAction?: (action: TeacherAction) => void;
+  mailtoHref: string;
+  hasEmail: boolean;
+}
+
+function TeacherDecisionBlock({ onAction, mailtoHref, hasEmail }: TeacherDecisionBlockProps) {
   return (
     <div className="px-5 sm:px-6 pb-6 pt-1 border-t border-slate-100">
       <h4 className="text-sm font-bold text-slate-800 mb-3 mt-4">Решение преподавателя</h4>
@@ -273,8 +310,17 @@ function TeacherDecisionBlock({ onAction, mailtoHref, hasEmail }) {
   );
 }
 
-function RealShyndyqReport({ report, context, isTeacher, onBack, onAction, teacherName }) {
-  const [mode, setMode] = useState("style");
+interface ShyndyqReportProps {
+  report: ShynReportEntry | null | undefined;
+  context: ShynReportContext;
+  isTeacher?: boolean;
+  onBack: () => void;
+  onAction?: (action: TeacherAction) => void;
+  teacherName?: string | null;
+}
+
+function RealShyndyqReport({ report, context, isTeacher, onBack, onAction, teacherName }: ShyndyqReportProps & { report: Extract<ShynReportEntry, { source: "real" }> }) {
+  const [mode, setMode] = useState<"style" | "ai">("style");
 
   if (report.status === "error") {
     return (
@@ -387,7 +433,7 @@ function RealShyndyqReport({ report, context, isTeacher, onBack, onAction, teach
 
           <div className="grid sm:grid-cols-2 gap-3 mt-5">
             {(() => {
-              const styleMeta = aiTier === "red" ? CARD_TIER_META.neutral : (CARD_TIER_META[report.docStyleTier] || CARD_TIER_META.neutral);
+              const styleMeta = aiTier === "red" ? CARD_TIER_META.neutral : (CARD_TIER_META[(report.docStyleTier as TierKey) ?? "neutral"] || CARD_TIER_META.neutral);
               const StyleIcon = styleMeta.icon;
               return (
                 <div className={`rounded-xl border-2 p-4 ${styleMeta.cls}`}>
@@ -407,7 +453,7 @@ function RealShyndyqReport({ report, context, isTeacher, onBack, onAction, teach
               );
             })()}
             {(() => {
-              const aiMeta = CARD_TIER_META[aiTier] || CARD_TIER_META.neutral;
+              const aiMeta = CARD_TIER_META[(aiTier as TierKey) ?? "neutral"] || CARD_TIER_META.neutral;
               const AiIcon = aiMeta.icon;
               return (
                 <div className={`rounded-xl border-2 p-4 ${aiMeta.cls}`}>
@@ -488,16 +534,14 @@ function RealShyndyqReport({ report, context, isTeacher, onBack, onAction, teach
   );
 }
 
-
-
 /**
- * report: результат shynClient.buildReport(...)
- * context: { studentName, assignmentTitle, courseTitle, submittedAt }
+ * report: результат shynClient.buildReport(...) | реальный API-отчёт | "loading"
+ * context: { studentName, assignmentTitle, courseTitle, ... }
  * isTeacher: показывает дополнительные действия преподавателя
  * onBack, onAction(action)
  */
-export function ShyndyqReport({ report, context, isTeacher = false, onBack, onAction, teacherName }) {
-  if (!report) return null;
+export function ShyndyqReport({ report, context, isTeacher = false, onBack, onAction, teacherName }: ShyndyqReportProps) {
+  if (!report || report === "loading") return null;
 
   if (report.source === "real") {
     return (

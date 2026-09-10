@@ -1,9 +1,10 @@
-import React, { useMemo } from "react";
+import { useMemo } from "react";
 import { Users, FileText, ChevronRight } from "lucide-react";
 import { ShyndyqBadge } from "./Shyndyq";
 import { buildReport } from "./shynClient";
+import type { RosterEntry, RosterRow } from "./types";
 
-export const TEACHER = {
+export const TEACHER: { fullName: string; department: string; group: string } = {
   fullName: "Ким Руслан Сергеевич",
   department: "Кафедра информационных систем",
   group: "ИС-21-1",
@@ -12,7 +13,7 @@ export const TEACHER = {
 // Роспись группы по заданию «Задание 2: Верстка адаптивной страницы» (a3).
 // Разный набор профилей специально подобран так, чтобы на одном экране
 // преподаватель видел весь спектр: норма / расхождение / внимание / нет данных.
-export const ROSTER = [
+export const ROSTER: RosterEntry[] = [
   {
     id: "s1", studentName: "Ахметов Нурлан Ерланович", studentId: "21О-1147",
     studentEmail: "n.akhmetov@damqor.edu",
@@ -51,8 +52,12 @@ export const ROSTER = [
   },
 ];
 
-export function TeacherDashboard({ onOpenReport }) {
-  const rows = useMemo(
+interface TeacherDashboardProps {
+  onOpenReport: (row: RosterRow) => void;
+}
+
+export function TeacherDashboard({ onOpenReport }: TeacherDashboardProps) {
+  const rows: RosterRow[] = useMemo(
     () =>
       ROSTER.map((s) => ({
         ...s,
@@ -109,7 +114,7 @@ export function TeacherDashboard({ onOpenReport }) {
                 {r.grade !== null ? `${r.grade}/${r.maxScore}` : <span className="text-slate-400 font-normal">не оценено</span>}
               </span>
               <div>
-                <ShyndyqBadge report={r.report} />
+                <ShyndyqBadge report={{ source: "mock", ...r.report }} />
               </div>
               <ChevronRight size={16} className="text-slate-300 justify-self-end hidden sm:block" />
             </button>

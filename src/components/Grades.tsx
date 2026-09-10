@@ -1,16 +1,22 @@
-import React from "react";
 import { COURSES, COLOR_MAP } from "../data/university";
 import { scoreToGrade } from "../utils/format";
+import type { Assignment } from "../types";
 
-function Grades({ assignments }) {
+interface GradesProps {
+  assignments: Assignment[];
+}
+
+function Grades({ assignments }: GradesProps) {
   const rows = COURSES.map((course) => {
     const graded = assignments.filter((a) => a.courseId === course.id && a.status === "graded");
-    const pct = graded.length ? Math.round(graded.reduce((s, a) => s + (a.grade / a.maxScore) * 100, 0) / graded.length) : null;
+    const pct = graded.length
+      ? Math.round(graded.reduce((s, a) => s + ((a.grade as number) / a.maxScore) * 100, 0) / graded.length)
+      : null;
     return { course, graded, pct };
   });
   const overallGraded = assignments.filter((a) => a.status === "graded");
   const overallPct = overallGraded.length
-    ? Math.round(overallGraded.reduce((s, a) => s + (a.grade / a.maxScore) * 100, 0) / overallGraded.length)
+    ? Math.round(overallGraded.reduce((s, a) => s + ((a.grade as number) / a.maxScore) * 100, 0) / overallGraded.length)
     : null;
   const overallGpa = overallPct !== null ? scoreToGrade(overallPct) : null;
 

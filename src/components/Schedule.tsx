@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, MapPin } from "lucide-react";
 import { SCHEDULE, EXTRA_EVENTS, TODAY } from "../data/university";
+import type { Assignment, CalendarEvent, CalendarEventType } from "../types";
 
 function Schedule() {
   return (
@@ -27,16 +28,21 @@ function Schedule() {
 
 /* ============================== КАЛЕНДАРЬ ============================== */
 
-function CalendarView({ assignments, onOpenAssignment }) {
+interface CalendarViewProps {
+  assignments: Assignment[];
+  onOpenAssignment: (id: string) => void;
+}
+
+function CalendarView({ assignments, onOpenAssignment }: CalendarViewProps) {
   const [monthOffset, setMonthOffset] = useState(0);
-  const [selectedDay, setSelectedDay] = useState(null);
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
 
   const viewDate = new Date(TODAY.getFullYear(), TODAY.getMonth() + monthOffset, 1);
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth();
 
-  const events = useMemo(() => {
-    const list = [];
+  const events = useMemo<CalendarEvent[]>(() => {
+    const list: CalendarEvent[] = [];
     assignments.forEach((a) => list.push({ date: new Date(a.deadline), title: a.title, type: "assignment", id: a.id }));
     EXTRA_EVENTS.forEach((e) => list.push({ date: e.date, title: e.title, type: e.type }));
     return list;
@@ -44,15 +50,15 @@ function CalendarView({ assignments, onOpenAssignment }) {
 
   const firstDayIdx = (new Date(year, month, 1).getDay() + 6) % 7; // понедельник = 0
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const cells = [];
+  const cells: (number | null)[] = [];
   for (let i = 0; i < firstDayIdx; i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
 
-  const eventsForDay = (d) => events.filter((e) => e.date.getFullYear() === year && e.date.getMonth() === month && e.date.getDate() === d);
+  const eventsForDay = (d: number) => events.filter((e) => e.date.getFullYear() === year && e.date.getMonth() === month && e.date.getDate() === d);
   const selectedEvents = selectedDay ? eventsForDay(selectedDay) : [];
-  const isToday = (d) => d === TODAY.getDate() && month === TODAY.getMonth() && year === TODAY.getFullYear();
+  const isToday = (d: number) => d === TODAY.getDate() && month === TODAY.getMonth() && year === TODAY.getFullYear();
 
-  const TYPE_DOT = { assignment: "bg-cyan-500", exam: "bg-red-500", event: "bg-amber-500" };
+  const TYPE_DOT: Record<CalendarEventType, string> = { assignment: "bg-cyan-500", exam: "bg-red-500", event: "bg-amber-500" };
 
   return (
     <div className="grid lg:grid-cols-3 gap-6">
@@ -63,7 +69,7 @@ function CalendarView({ assignments, onOpenAssignment }) {
           <button onClick={() => setMonthOffset((m) => m + 1)} className="p-1.5 rounded-lg hover:bg-slate-100"><ChevronRight size={18} /></button>
         </div>
         <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-semibold text-slate-400 mb-1">
-          {["Пн","Вт","Ср","Чт","Пт","Сб","Вс"].map((d) => <div key={d}>{d}</div>)}
+          {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map((d) => <div key={d}>{d}</div>)}
         </div>
         <div className="grid grid-cols-7 gap-1">
           {cells.map((d, i) => {
@@ -98,7 +104,7 @@ function CalendarView({ assignments, onOpenAssignment }) {
           {selectedEvents.map((e, i) => (
             <button
               key={i}
-              onClick={() => e.type === "assignment" && onOpenAssignment(e.id)}
+              onClick={() => e.type === "assignment" && e.id && onOpenAssignment(e.id)}
               className={`w-full text-left p-3 rounded-lg border border-slate-100 ${e.type === "assignment" ? "hover:border-cyan-300 hover:bg-cyan-50/40" : ""}`}
             >
               <div className="flex items-center gap-2">
@@ -122,8 +128,5 @@ function CalendarView({ assignments, onOpenAssignment }) {
     </div>
   );
 }
-
-/* ============================== ЗАДАНИЯ (список) ============================== */
-
 
 export { Schedule, CalendarView };

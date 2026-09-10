@@ -6,8 +6,9 @@ import {
   Home, BookOpen, CalendarDays, Calendar as CalendarIcon, ClipboardList,
   BarChart3, Bell, User, Users,
 } from "lucide-react";
+import type { NavItem } from "../types";
 
-const STUDENT_NAV_ITEMS = [
+const STUDENT_NAV_ITEMS: NavItem[] = [
   { key: "home", label: "Главная", icon: Home },
   { key: "courses", label: "Мои дисциплины", icon: BookOpen },
   { key: "schedule", label: "Расписание", icon: CalendarDays },
@@ -18,7 +19,7 @@ const STUDENT_NAV_ITEMS = [
   { key: "profile", label: "Профиль", icon: User },
 ];
 
-const TEACHER_NAV_ITEMS = [
+const TEACHER_NAV_ITEMS: NavItem[] = [
   { key: "review", label: "Проверка работ", icon: Users },
   { key: "profile", label: "Профиль", icon: User },
 ];

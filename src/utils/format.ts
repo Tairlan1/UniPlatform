@@ -4,21 +4,22 @@
  */
 
 import { TODAY } from "../data/university";
+import type { Assignment, AssignmentStatus, DeadlineLabel, GradeInfo } from "../types";
 
-function fmtDate(d) {
+function fmtDate(d: Date | null | undefined): string {
   if (!d) return "";
   return d.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
-function fmtDateTime(d) {
+function fmtDateTime(d: Date | null | undefined): string {
   if (!d) return "";
   return d.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" }) +
     ", " + d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
 }
-function daysUntil(d) {
-  const ms = d.setHours(0,0,0,0) - new Date(TODAY).setHours(0,0,0,0);
+function daysUntil(d: Date): number {
+  const ms = d.setHours(0, 0, 0, 0) - new Date(TODAY).setHours(0, 0, 0, 0);
   return Math.round(ms / 86400000);
 }
-function deadlineLabel(deadline) {
+function deadlineLabel(deadline: Date): DeadlineLabel {
   const diff = daysUntil(new Date(deadline));
   if (diff < 0) return { text: `Просрочено на ${Math.abs(diff)} дн.`, urgent: true };
   if (diff === 0) return { text: "Сегодня — крайний срок", urgent: true };
@@ -26,13 +27,13 @@ function deadlineLabel(deadline) {
   if (diff <= 3) return { text: `Осталось ${diff} дн.`, urgent: true };
   return { text: `Осталось ${diff} дн.`, urgent: false };
 }
-function effectiveStatus(a) {
+function effectiveStatus(a: Assignment): AssignmentStatus {
   if (a.status === "graded") return "graded";
   if (a.status === "review") return "review";
   if (new Date(a.deadline) < TODAY && !a.submission) return "overdue";
   return "new";
 }
-function scoreToGrade(pct) {
+function scoreToGrade(pct: number): GradeInfo {
   if (pct >= 95) return { letter: "A", gpa: 4.0 };
   if (pct >= 90) return { letter: "A-", gpa: 3.67 };
   if (pct >= 85) return { letter: "B+", gpa: 3.33 };

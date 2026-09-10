@@ -1,5 +1,5 @@
 /**
- * shynApiClient.js
+ * shynApiClient.ts
  * ─────────────────────────────────────────────────────────────────────────
  * Настоящий сетевой клиент к Shyn (не мок). Дёргает Flask-эндпоинт
  * api_analyze.py по HTTP и возвращает то, что реально вернула обученная
@@ -25,11 +25,13 @@
  *   VITE_SHYN_API_BASE=https://shyn.damqor.edu
  */
 
-export const SHYN_API_BASE = import.meta.env.VITE_SHYN_API_BASE || "http://127.0.0.1:5001";
+import type { ShynApiAnalyzeResponse } from "./types";
+
+export const SHYN_API_BASE: string = import.meta.env.VITE_SHYN_API_BASE || "http://127.0.0.1:5001";
 
 export class ShynApiError extends Error {}
 
-export async function checkShynApiHealth() {
+export async function checkShynApiHealth(): Promise<boolean> {
   try {
     const res = await fetch(`${SHYN_API_BASE}/api/v1/health`, { method: "GET" });
     return res.ok;
@@ -38,27 +40,30 @@ export async function checkShynApiHealth() {
   }
 }
 
+export interface AnalyzeSubmissionParams {
+  file?: File | null;
+  text?: string;
+  expectedAuthor?: string | null;
+}
+
 /**
  * Реальный вызов анализа. Либо file (File-объект из <input type="file">),
  * либо text (строка) — что передано, то и анализируется.
- *
- * @returns {Promise<Object>} JSON от api_analyze.py: docStyleScore,
- *   docAiScore, paragraphs: [{ text, wordCount, styleScore, topAuthor,
- *   topAuthorProb, aiScore, flag }], modelInfo, ...
  */
-export async function analyzeSubmission({ file, text, expectedAuthor }) {
+export async function analyzeSubmission({ file, text, expectedAuthor }: AnalyzeSubmissionParams): Promise<ShynApiAnalyzeResponse> {
   const form = new FormData();
   if (file) form.append("file", file);
   if (text) form.append("text", text);
   form.append("expected_author", expectedAuthor || "");
 
-  let res;
+  let res: Response;
   try {
     res = await fetch(`${SHYN_API_BASE}/api/v1/analyze`, { method: "POST", body: form });
   } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
     throw new ShynApiError(
       `Не удалось связаться с Shyn API на ${SHYN_API_BASE}. Убедитесь, что запущен ` +
-      `"python3 api_analyze.py" в репозитории Shyn. (${e.message})`
+      `"python3 api_analyze.py" в репозитории Shyn. (${message})`
     );
   }
 

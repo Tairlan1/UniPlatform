@@ -1,10 +1,17 @@
-import React from "react";
 import { courseById, COLOR_MAP, STATUS_META } from "../data/university";
 import { effectiveStatus, deadlineLabel, fmtDate } from "../utils/format";
 import { ShyndyqBadge } from "../Shyndyq";
+import type { Assignment, ShynReportEntry } from "../types";
 
-function AssignmentRow({ a, report, onClick }) {
+interface AssignmentRowProps {
+  a: Assignment;
+  report?: ShynReportEntry | null;
+  onClick: () => void;
+}
+
+function AssignmentRow({ a, report, onClick }: AssignmentRowProps) {
   const course = courseById(a.courseId);
+  if (!course) return null;
   const status = effectiveStatus(a);
   const meta = STATUS_META[status];
   const StatusIcon = meta.icon;

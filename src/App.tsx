@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { ClipboardList, LogOut } from "lucide-react";
 
 import { ShyndyqReport } from "./Shyndyq";
@@ -21,30 +21,34 @@ import { AssignmentsList, AssignmentDetail } from "./components/Assignments";
 import Grades from "./components/Grades";
 import Announcements from "./components/Announcements";
 import Profile from "./components/Profile";
+import type { Assignment, ReportViewState, Role, RosterRow, ShynReportEntry, StudentAccount, Submission } from "./types";
 
 export default function App() {
   const [loggedIn, setLoggedIn] = useState(false);
-  const [role, setRole] = useState("student"); // 'student' | 'teacher'
-  const [currentStudent, setCurrentStudent] = useState(null);
+  const [role, setRole] = useState<Role>("student");
+  const [currentStudent, setCurrentStudent] = useState<StudentAccount | null>(null);
   const [activeTab, setActiveTab] = useState("home");
-  const [selectedCourseId, setSelectedCourseId] = useState(null);
-  const [selectedAssignmentId, setSelectedAssignmentId] = useState(null);
-  const [assignments, setAssignments] = useState(initialAssignments);
+  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
+  const [selectedAssignmentId, setSelectedAssignmentId] = useState<string | null>(null);
+  const [assignments, setAssignments] = useState<Assignment[]>(initialAssignments);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [shynReports, setShynReports] = useState(() => {
-    const initial = {};
-    Object.keys(SHYN_SEEDS).forEach((id) => { initial[id] = shynReportFor(id); });
+  const [shynReports, setShynReports] = useState<Record<string, ShynReportEntry>>(() => {
+    const initial: Record<string, ShynReportEntry> = {};
+    Object.keys(SHYN_SEEDS).forEach((id) => {
+      const report = shynReportFor(id);
+      if (report) initial[id] = { source: "mock", ...report };
+    });
     return initial;
   });
-  const [reportView, setReportView] = useState(null); // { report, context, isTeacher } | null
+  const [reportView, setReportView] = useState<ReportViewState | null>(null);
 
   const navItems = role === "teacher" ? TEACHER_NAV_ITEMS : STUDENT_NAV_ITEMS;
 
-  const updateAssignment = (id, patch) => {
+  const updateAssignment = (id: string, patch: Partial<Assignment>) => {
     setAssignments((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a)));
   };
 
-  const goToAssignment = (id) => {
+  const goToAssignment = (id: string) => {
     setSelectedAssignmentId(id);
     setActiveTab("assignments");
   };
@@ -57,10 +61,10 @@ export default function App() {
   // них сравнение со стилем осмысленно, потому что модель действительно
   // обучена на этих пяти авторах. Для обычного студента (Нурлан,
   // expectedAuthor = null) у реальной модели попросту нет эталона "его
-  // личного стиля" - для него используется мок-клиент shynClient.js,
+  // личного стиля" - для него используется мок-клиент shynClient.ts,
   // сравнивающий с историей ЕГО ЖЕ прошлых работ (другая, гипотетическая
   // концепция, которую реальный бэкенд пока не реализует).
-  const handleSubmitted = (assignmentId, submission) => {
+  const handleSubmitted = (assignmentId: string, submission: Submission) => {
     setShynReports((prev) => ({ ...prev, [assignmentId]: "loading" }));
 
     if (currentStudent?.expectedAuthor) {
@@ -77,7 +81,7 @@ export default function App() {
           // % не показывается нигде, включая компактный бейдж, а не только
           // на полной странице отчёта.
           const verdict = api.docAiTier === "red" ? "red" : api.docAiTier === "yellow" ? "amber" : "green";
-          const toPct = (x) => (x === null || x === undefined ? null : Math.round(x * 10000) / 100);
+          const toPct = (x: number | null | undefined) => (x === null || x === undefined ? null : Math.round(x * 10000) / 100);
           setShynReports((prev) => ({
             ...prev,
             [assignmentId]: {
@@ -106,10 +110,11 @@ export default function App() {
             },
           }));
         })
-        .catch((e) => {
+        .catch((e: unknown) => {
+          const message = e instanceof Error ? e.message : String(e);
           setShynReports((prev) => ({
             ...prev,
-            [assignmentId]: { source: "real", status: "error", message: e.message },
+            [assignmentId]: { source: "real", status: "error", message },
           }));
         });
       return;
@@ -121,7 +126,7 @@ export default function App() {
     });
   };
 
-  const openStudentReport = (assignment) => {
+  const openStudentReport = (assignment: Assignment) => {
     const report = shynReports[assignment.id];
     if (!report || report === "loading") return;
     setReportView({
@@ -139,9 +144,9 @@ export default function App() {
     });
   };
 
-  const openTeacherReport = (row) => {
+  const openTeacherReport = (row: RosterRow) => {
     setReportView({
-      report: row.report,
+      report: { source: "mock", ...row.report },
       context: {
         studentName: row.studentName,
         studentEmail: row.studentEmail,

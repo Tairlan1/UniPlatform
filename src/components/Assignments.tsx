@@ -7,15 +7,22 @@ import { COURSES, COLOR_MAP, STATUS_META, courseById } from "../data/university"
 import { effectiveStatus, deadlineLabel, fmtDate, fmtDateTime } from "../utils/format";
 import { ShyndyqBadge } from "../Shyndyq";
 import AssignmentRow from "./AssignmentRow";
+import type { Assignment, AssignmentFile, ShynReportEntry, Submission } from "../types";
 
-function AssignmentsList({ assignments, shynReports, onOpen }) {
+interface AssignmentsListProps {
+  assignments: Assignment[];
+  shynReports?: Record<string, ShynReportEntry> | null;
+  onOpen: (id: string) => void;
+}
+
+function AssignmentsList({ assignments, shynReports, onOpen }: AssignmentsListProps) {
   const [courseFilter, setCourseFilter] = useState("all");
   const [open, setOpen] = useState(false);
 
   const activeCourse = courseFilter === "all" ? null : courseById(courseFilter);
   const filtered = assignments
     .filter((a) => courseFilter === "all" || a.courseId === courseFilter)
-    .sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
+    .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime());
 
   return (
     <div>
@@ -66,30 +73,41 @@ function AssignmentsList({ assignments, shynReports, onOpen }) {
 
 /* ============================== ЗАДАНИЕ — ДЕТАЛЬНАЯ СТРАНИЦА (СДАЧА РАБОТЫ) ============================== */
 
-function AssignmentDetail({ assignment, shynReport, onBack, onUpdate, onSubmitted, onOpenShynReport }) {
+interface AssignmentDetailProps {
+  assignment: Assignment;
+  shynReport?: ShynReportEntry | null;
+  onBack: () => void;
+  onUpdate: (id: string, patch: Partial<Assignment>) => void;
+  onSubmitted?: (id: string, submission: Submission) => void;
+  onOpenShynReport: () => void;
+}
+
+function AssignmentDetail({ assignment, shynReport, onBack, onUpdate, onSubmitted, onOpenShynReport }: AssignmentDetailProps) {
   const course = courseById(assignment.courseId);
   const status = effectiveStatus(assignment);
   const meta = STATUS_META[status];
   const StatusIcon = meta.icon;
 
   const [text, setText] = useState("");
-  const [files, setFiles] = useState([]);
+  const [files, setFiles] = useState<AssignmentFile[]>([]);
   const [showResubmitForm, setShowResubmitForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [justSubmitted, setJustSubmitted] = useState(false);
 
+  if (!course) return null;
+
   const canSubmitNow = status === "new" || status === "overdue" || (status === "graded" && assignment.allowResubmit && showResubmitForm);
   const dl = deadlineLabel(new Date(assignment.deadline));
 
-  const handleFiles = (e) => {
-    const list = Array.from(e.target.files || []).map((f) => ({
+  const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const list: AssignmentFile[] = Array.from(e.target.files || []).map((f) => ({
       name: f.name,
       size: f.size > 1024 * 1024 ? `${(f.size / (1024 * 1024)).toFixed(1)} МБ` : `${Math.max(1, Math.round(f.size / 1024))} КБ`,
       raw: f, // настоящий File - нужен, если сдача пойдёт в реальный Shyn API
     }));
     setFiles((prev) => [...prev, ...list]);
   };
-  const removeFile = (idx) => setFiles((prev) => prev.filter((_, i) => i !== idx));
+  const removeFile = (idx: number) => setFiles((prev) => prev.filter((_, i) => i !== idx));
 
   const submit = () => {
     if (!text.trim() && files.length === 0) return;
@@ -97,7 +115,7 @@ function AssignmentDetail({ assignment, shynReport, onBack, onUpdate, onSubmitte
     setTimeout(() => {
       const submittedAt = new Date();
       const isLate = new Date(assignment.deadline) < submittedAt;
-      const submission = { text: text.trim(), files, submittedAt, late: isLate };
+      const submission: Submission = { text: text.trim(), files, submittedAt, late: isLate };
       const newHistoryEntry = { submittedAt, files, grade: null };
       onUpdate(assignment.id, {
         status: "review",
@@ -293,7 +311,13 @@ function AssignmentDetail({ assignment, shynReport, onBack, onUpdate, onSubmitte
   );
 }
 
-function InfoBox({ label, value, urgent }) {
+interface InfoBoxProps {
+  label: string;
+  value: string;
+  urgent?: boolean;
+}
+
+function InfoBox({ label, value, urgent }: InfoBoxProps) {
   return (
     <div className="bg-slate-50 rounded-lg p-2.5">
       <p className="text-slate-400 font-medium">{label}</p>
