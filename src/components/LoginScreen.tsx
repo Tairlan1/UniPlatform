@@ -2,9 +2,14 @@ import React, { useState } from "react";
 import { CheckCircle2, GraduationCap, Loader2, Lock, User, UserCircle } from "lucide-react";
 import Logo from "./Logo";
 import { UNIVERSITY, STUDENT_ACCOUNTS, TODAY } from "../data/university";
+import type { Role, StudentAccount } from "../types";
 
-function LoginScreen({ onLogin }) {
-  const [loginRole, setLoginRole] = useState("student"); // 'student' | 'teacher'
+interface LoginScreenProps {
+  onLogin: (role: Role, account: StudentAccount | null) => void;
+}
+
+function LoginScreen({ onLogin }: LoginScreenProps) {
+  const [loginRole, setLoginRole] = useState<Role>("student");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -12,7 +17,7 @@ function LoginScreen({ onLogin }) {
 
   const TEACHER_CREDS = { login: "r.kim", password: "teacher2026" };
 
-  const submit = (e) => {
+  const submit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!username || !password) {
       setError("Введите логин и пароль.");
@@ -158,8 +163,5 @@ function LoginScreen({ onLogin }) {
     </div>
   );
 }
-
-/* ============================== ГЛАВНАЯ (DASHBOARD) ============================== */
-
 
 export default LoginScreen;

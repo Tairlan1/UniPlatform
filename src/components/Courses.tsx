@@ -1,10 +1,16 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { ChevronLeft, Paperclip } from "lucide-react";
 import { COURSES, COLOR_MAP, ANNOUNCEMENTS } from "../data/university";
 import { effectiveStatus, fmtDate } from "../utils/format";
 import AssignmentRow from "./AssignmentRow";
+import type { Assignment, Course } from "../types";
 
-function CoursesList({ onOpenCourse, assignments }) {
+interface CoursesListProps {
+  onOpenCourse: (id: string) => void;
+  assignments: Assignment[];
+}
+
+function CoursesList({ onOpenCourse, assignments }: CoursesListProps) {
   return (
     <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {COURSES.map((course) => {
@@ -35,10 +41,19 @@ function CoursesList({ onOpenCourse, assignments }) {
   );
 }
 
-function CourseDetail({ course, assignments, onBack, onOpenAssignment }) {
-  const [tab, setTab] = useState("overview");
+type CourseTabKey = "overview" | "lectures" | "materials" | "labs" | "assignments" | "grades" | "announcements";
+
+interface CourseDetailProps {
+  course: Course;
+  assignments: Assignment[];
+  onBack: () => void;
+  onOpenAssignment: (id: string) => void;
+}
+
+function CourseDetail({ course, assignments, onBack, onOpenAssignment }: CourseDetailProps) {
+  const [tab, setTab] = useState<CourseTabKey>("overview");
   const c = COLOR_MAP[course.color];
-  const tabs = [
+  const tabs: { key: CourseTabKey; label: string }[] = [
     { key: "overview", label: "Обзор" },
     { key: "lectures", label: "Лекции" },
     { key: "materials", label: "Материалы" },
@@ -152,8 +167,5 @@ function CourseDetail({ course, assignments, onBack, onOpenAssignment }) {
     </div>
   );
 }
-
-/* ============================== РАСПИСАНИЕ ============================== */
-
 
 export { CoursesList, CourseDetail };

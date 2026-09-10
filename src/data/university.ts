@@ -5,12 +5,16 @@
  */
 
 import { FileText, Clock, CheckCircle2, AlertCircle } from "lucide-react";
+import type {
+  Announcement, Assignment, ColorMapEntry, Course, ExtraEvent, ScheduleDay,
+  StatusMetaEntry, StudentAccount,
+} from "../types";
 
 /* ============================== ДАННЫЕ ============================== */
 
 const TODAY = new Date(2026, 7, 24); // 24 августа 2026
 
-const UNIVERSITY = {
+const UNIVERSITY: { name: string; shortName: string; motto: string } = {
   name: "DAMQOR University of Technology",
   shortName: "DAMQOR",
   motto: "Engineering the future",
@@ -22,7 +26,7 @@ const UNIVERSITY = {
 // эталона "личного стиля Нурлана"). У пяти "авторских" аккаунтов ниже есть
 // expectedAuthor - ключ одного из пяти РЕАЛЬНО обученных стилей, поэтому их
 // сдачи уходят в настоящий Shyn API (см. handleSubmitted), а не в мок.
-const STUDENT_ACCOUNTS = [
+const STUDENT_ACCOUNTS: StudentAccount[] = [
   {
     login: "n.akhmetov", password: "student2026", expectedAuthor: null,
     fullName: "Ахметов Нурлан Ерланович", firstName: "Нурлан", initials: "НА",
@@ -85,7 +89,7 @@ const STUDENT_ACCOUNTS = [
   },
 ];
 
-const COURSES = [
+const COURSES: Course[] = [
   { id: "c1", title: "Базы данных", teacher: "Сатпаева А.К.", credits: 5, color: "cyan",
     overview: "Курс посвящён реляционным СУБД: проектирование схем, нормализация, SQL, транзакции и индексирование. По итогам студенты проектируют и реализуют собственную базу данных.",
     lectures: [
@@ -168,9 +172,9 @@ const COURSES = [
   },
 ];
 
-const courseById = (id) => COURSES.find((c) => c.id === id);
+const courseById = (id: string): Course | undefined => COURSES.find((c) => c.id === id);
 
-const initialAssignments = [
+const initialAssignments: Assignment[] = [
   {
     id: "a1", courseId: "c3",
     title: "Лабораторная работа №3: Планирование процессов",
@@ -266,7 +270,7 @@ const initialAssignments = [
   },
 ];
 
-const SCHEDULE = [
+const SCHEDULE: ScheduleDay[] = [
   { day: "Понедельник", items: [
     { time: "09:00–09:50", course: "Базы данных", type: "Лекция", room: "ауд. 302", teacher: "Сатпаева А.К." },
     { time: "10:00–10:50", course: "Web-программирование", type: "Практика", room: "ауд. 214 (комп.)", teacher: "Ким Р.С." },
@@ -294,14 +298,14 @@ const SCHEDULE = [
   ]},
 ];
 
-const EXTRA_EVENTS = [
+const EXTRA_EVENTS: ExtraEvent[] = [
   { date: new Date(2026, 7, 28), title: "Рубежный контроль №1 — Базы данных", type: "exam" },
   { date: new Date(2026, 8, 1), title: "Начало осеннего семестра", type: "event" },
   { date: new Date(2026, 8, 15), title: "Рубежный контроль №1 — Операционные системы", type: "exam" },
   { date: new Date(2026, 8, 22), title: "День языков народов Казахстана", type: "event" },
 ];
 
-const ANNOUNCEMENTS = [
+const ANNOUNCEMENTS: Announcement[] = [
   { id: "n1", scope: "Университет", author: "Деканат ФИТ", date: new Date(2026, 7, 22),
     title: "Расписание рубежного контроля №1",
     text: "Уважаемые студенты! Расписание РК1 опубликовано в разделе «Календарь». Просьба ознакомиться заранее и уточнить аудитории у деканата." },
@@ -321,14 +325,14 @@ const ANNOUNCEMENTS = [
 
 /* ============================== УТИЛИТЫ ============================== */
 
-const STATUS_META = {
+const STATUS_META: Record<string, StatusMetaEntry> = {
   new: { label: "Новое", classes: "bg-slate-100 text-slate-700 border-slate-300", icon: FileText },
   review: { label: "Ожидание", classes: "bg-blue-50 text-blue-700 border-blue-300", icon: Clock },
   graded: { label: "Проверено", classes: "bg-emerald-50 text-emerald-700 border-emerald-300", icon: CheckCircle2 },
   overdue: { label: "Просрочено", classes: "bg-red-50 text-red-700 border-red-300", icon: AlertCircle },
 };
 
-const COLOR_MAP = {
+const COLOR_MAP: Record<string, ColorMapEntry> = {
   cyan: { bg: "bg-cyan-600", light: "bg-cyan-50", text: "text-cyan-700", border: "border-cyan-200", ring: "ring-cyan-500" },
   violet: { bg: "bg-violet-600", light: "bg-violet-50", text: "text-violet-700", border: "border-violet-200", ring: "ring-violet-500" },
   amber: { bg: "bg-amber-500", light: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", ring: "ring-amber-500" },
@@ -337,7 +341,7 @@ const COLOR_MAP = {
   slate: { bg: "bg-slate-600", light: "bg-slate-50", text: "text-slate-700", border: "border-slate-200", ring: "ring-slate-500" },
 };
 
-const AUTHOR_DISPLAY_NAMES = {
+const AUTHOR_DISPLAY_NAMES: Record<string, string> = {
   ArthurConanDoyle: "Arthur Conan Doyle",
   EdgarAllanPoe: "Edgar Allan Poe",
   "H.G.Wells": "H.G. Wells",

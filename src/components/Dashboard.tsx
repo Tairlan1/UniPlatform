@@ -2,13 +2,21 @@ import React, { useMemo } from "react";
 import { BarChart3, ClipboardList, CheckCircle2, AlertCircle } from "lucide-react";
 import { courseById, ANNOUNCEMENTS, COLOR_MAP } from "../data/university";
 import { effectiveStatus, deadlineLabel, fmtDate } from "../utils/format";
+import type { Assignment, ColorKey, StudentAccount } from "../types";
 
-function Dashboard({ assignments, onOpenAssignment, onGoTo, student }) {
+interface DashboardProps {
+  assignments: Assignment[];
+  onOpenAssignment: (id: string) => void;
+  onGoTo: (tab: string) => void;
+  student: StudentAccount | null;
+}
+
+function Dashboard({ assignments, onOpenAssignment, onGoTo, student }: DashboardProps) {
   const upcoming = useMemo(() => {
     return assignments
       .filter((a) => effectiveStatus(a) !== "graded")
       .filter((a) => !a.submission || effectiveStatus(a) === "overdue")
-      .sort((a, b) => new Date(a.deadline) - new Date(b.deadline))
+      .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime())
       .slice(0, 5);
   }, [assignments]);
 
@@ -16,10 +24,12 @@ function Dashboard({ assignments, onOpenAssignment, onGoTo, student }) {
   const pendingCount = assignments.filter((a) => effectiveStatus(a) === "new" || effectiveStatus(a) === "review").length;
   const overdueCount = assignments.filter((a) => effectiveStatus(a) === "overdue").length;
   const avg = useMemo(() => {
-    const graded = assignments.filter((a) => a.status === "graded");
+    const graded = assignments.filter((a) => a.status === "graded" && a.grade !== null);
     if (!graded.length) return null;
-    return Math.round(graded.reduce((s, a) => s + (a.grade / a.maxScore) * 100, 0) / graded.length);
+    return Math.round(graded.reduce((s, a) => s + ((a.grade as number) / a.maxScore) * 100, 0) / graded.length);
   }, [assignments]);
+
+  if (!student) return null;
 
   return (
     <div className="space-y-6">
@@ -50,6 +60,7 @@ function Dashboard({ assignments, onOpenAssignment, onGoTo, student }) {
             <div className="space-y-2">
               {upcoming.map((a) => {
                 const course = courseById(a.courseId);
+                if (!course) return null;
                 const dl = deadlineLabel(new Date(a.deadline));
                 return (
                   <button
@@ -92,7 +103,14 @@ function Dashboard({ assignments, onOpenAssignment, onGoTo, student }) {
   );
 }
 
-function StatCard({ label, value, icon: Icon, color }) {
+interface StatCardProps {
+  label: string;
+  value: string | number;
+  icon: React.ComponentType<{ size?: number }>;
+  color: ColorKey;
+}
+
+function StatCard({ label, value, icon: Icon, color }: StatCardProps) {
   const c = COLOR_MAP[color] || COLOR_MAP.cyan;
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-4 flex items-center gap-3">
@@ -106,8 +124,5 @@ function StatCard({ label, value, icon: Icon, color }) {
     </div>
   );
 }
-
-/* ============================== МОИ ДИСЦИПЛИНЫ ============================== */
-
 
 export default Dashboard;

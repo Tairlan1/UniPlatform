@@ -1,6 +1,9 @@
-import React from "react";
+interface LogoProps {
+  size?: number;
+  className?: string;
+}
 
-function Logo({ size = 24, className = "" }) {
+function Logo({ size = 24, className = "" }: LogoProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 48 48" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
       <defs>

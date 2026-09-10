@@ -1,5 +1,5 @@
 /**
- * shynClient.js
+ * shynClient.ts
  * ─────────────────────────────────────────────────────────────────────────
  * Клиент интеграции с Shyn (сервис проверки стиля/ИИ-происхождения работ).
  *
@@ -16,8 +16,10 @@
  * к настоящему API, сигнатуры и форма данных остаются те же.
  */
 
-// Простой детерминированный хэш строки → число [0, 1)
-function seededRandom(seed) {
+import type { ShynBuildReportResult, ShynMetric, ShynVerdict } from "./types";
+
+// Простой детерминированный хэш строки → генератор чисел [0, 1)
+function seededRandom(seed: string): () => number {
   let h = 0;
   for (let i = 0; i < seed.length; i++) {
     h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;
@@ -29,7 +31,7 @@ function seededRandom(seed) {
   };
 }
 
-const METRIC_LABELS = [
+const METRIC_LABELS: { key: string; label: string }[] = [
   { key: "sentenceLength", label: "Длина предложений" },
   { key: "lexicalVariety", label: "Лексическое разнообразие" },
   { key: "punctuation", label: "Пунктуационный рисунок" },
@@ -37,24 +39,26 @@ const METRIC_LABELS = [
   { key: "connectiveWords", label: "Служебные слова и связки" },
 ];
 
-function verdictFromScores(styleScore, aiScore) {
+function verdictFromScores(styleScore: number, aiScore: number): ShynVerdict {
   if (aiScore >= 55 || styleScore <= 45) return "red";
   if (aiScore >= 30 || styleScore <= 70) return "amber";
   return "green";
 }
 
+export interface BuildReportParams {
+  /** Уникальный id сдачи (напр. id задания) — используется как seed. */
+  submissionId: string;
+  /** Сколько прошлых самостоятельных работ этого студента уже в базе (для порога «достаточно данных»). */
+  priorWorksCount?: number;
+  /** Задать сценарий вручную для демо-данных вместо чисто случайного. */
+  profile?: "low" | "mid" | "high" | "flagged";
+}
+
 /**
  * Строит отчёт по фиксированному seed'у (id сдачи) — детерминированно,
  * чтобы одна и та же сдача всегда показывала одинаковый результат.
- *
- * @param {Object} params
- * @param {string} params.submissionId — уникальный id сдачи (напр. id задания)
- * @param {number} params.priorWorksCount — сколько прошлых самостоятельных
- *   работ этого студента уже в базе (для порога «достаточно данных»)
- * @param {"low"|"mid"|"high"|"flagged"} [params.profile] — задать сценарий
- *   вручную для демо-данных вместо чисто случайного
  */
-export function buildReport({ submissionId, priorWorksCount = 0, profile }) {
+export function buildReport({ submissionId, priorWorksCount = 0, profile }: BuildReportParams): ShynBuildReportResult {
   const MIN_PRIOR_WORKS = 3;
   const rand = seededRandom(submissionId);
 
@@ -72,18 +76,18 @@ export function buildReport({ submissionId, priorWorksCount = 0, profile }) {
   }
 
   // Профиль задаёт диапазон, внутри диапазона — детерминированный разброс
-  const ranges = {
+  const ranges: Record<string, { style: [number, number]; ai: [number, number] }> = {
     high: { style: [86, 97], ai: [1, 9] },
     mid: { style: [70, 85], ai: [10, 25] },
     low: { style: [55, 69], ai: [26, 44] },
     flagged: { style: [30, 52], ai: [45, 78] },
   };
-  const r = ranges[profile] || ranges.high;
+  const r = (profile && ranges[profile]) || ranges.high;
   const styleScore = Math.round(r.style[0] + rand() * (r.style[1] - r.style[0]));
   const aiScore = Math.round(r.ai[0] + rand() * (r.ai[1] - r.ai[0]));
   const verdict = verdictFromScores(styleScore, aiScore);
 
-  const metrics = METRIC_LABELS.map((m) => {
+  const metrics: ShynMetric[] = METRIC_LABELS.map((m) => {
     const baseline = Math.round(40 + rand() * 40);
     const drift = Math.round((rand() - 0.5) * (verdict === "green" ? 10 : verdict === "amber" ? 26 : 46));
     return {
@@ -102,7 +106,10 @@ export function buildReport({ submissionId, priorWorksCount = 0, profile }) {
     "Ритм чередования коротких и длинных предложений соответствует прошлым работам.",
   ];
   const highlightsCount = verdict === "green" ? 1 : verdict === "amber" ? 2 : 3;
-  const highlights = Array.from({ length: highlightsCount }, (_, i) => highlightPool[(Math.floor(rand() * highlightPool.length) + i) % highlightPool.length]);
+  const highlights = Array.from(
+    { length: highlightsCount },
+    (_, i) => highlightPool[(Math.floor(rand() * highlightPool.length) + i) % highlightPool.length]
+  );
 
   return {
     submissionId,
@@ -110,7 +117,7 @@ export function buildReport({ submissionId, priorWorksCount = 0, profile }) {
     priorWorksCount,
     styleScore,
     aiScore,
-    verdict, // 'green' | 'amber' | 'red'
+    verdict,
     metrics,
     highlights,
     generatedAt: new Date(),
@@ -127,7 +134,7 @@ export function buildReport({ submissionId, priorWorksCount = 0, profile }) {
  * GET /job-status/<id> (poll) → GET /report/<id>.
  * В реальной интеграции это тот же полинг, просто через сеть.
  */
-export function analyzeSubmission(opts) {
+export function analyzeSubmission(opts: BuildReportParams): Promise<ShynBuildReportResult> {
   return new Promise((resolve) => {
     const delay = 1400 + Math.round(seededRandom(opts.submissionId)() * 900);
     setTimeout(() => resolve(buildReport(opts)), delay);

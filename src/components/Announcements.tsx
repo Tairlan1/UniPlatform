@@ -1,10 +1,10 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Bell, ChevronDown } from "lucide-react";
 import { ANNOUNCEMENTS } from "../data/university";
 import { fmtDate } from "../utils/format";
 
 function Announcements() {
-  const [openId, setOpenId] = useState(null);
+  const [openId, setOpenId] = useState<string | null>(null);
   return (
     <div className="space-y-3">
       {ANNOUNCEMENTS.map((n) => {

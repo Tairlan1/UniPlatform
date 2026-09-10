@@ -1,9 +1,19 @@
-import React from "react";
 import { TEACHER } from "../TeacherView";
+import type { Role, StudentAccount } from "../types";
 
-function Profile({ role, student }) {
+interface ProfileProps {
+  role: Role;
+  student: StudentAccount | null;
+}
+
+interface ProfileField {
+  label: string;
+  value: string;
+}
+
+function Profile({ role, student }: ProfileProps) {
   if (role === "teacher") {
-    const fields = [
+    const fields: ProfileField[] = [
       { label: "ФИО", value: TEACHER.fullName },
       { label: "Кафедра", value: TEACHER.department },
       { label: "Курируемая группа", value: TEACHER.group },
@@ -32,7 +42,7 @@ function Profile({ role, student }) {
 
   if (!student) return null;
 
-  const fields = [
+  const fields: ProfileField[] = [
     { label: "ФИО", value: student.fullName },
     { label: "Студенческий ID", value: student.studentId },
     { label: "Группа", value: student.group },
