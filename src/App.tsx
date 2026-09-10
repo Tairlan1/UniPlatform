@@ -23,6 +23,29 @@ import Announcements from "./components/Announcements";
 import Profile from "./components/Profile";
 import type { Assignment, ReportViewState, Role, RosterRow, ShynReportEntry, StudentAccount, Submission } from "./types";
 
+interface StudentSession {
+  assignments: Assignment[];
+  shynReports: Record<string, ShynReportEntry>;
+}
+
+// Отдельная "работа" каждого студента демо-платформы - без этого все
+// студенты делят ОДНО общее состояние assignments/shynReports (они на
+// самом деле читают один и тот же initialAssignments), и сдача, сделанная
+// на одном аккаунте, оставалась видна после выхода и входа под другим
+// студентом. Ключ - student.login, инициализируется свежей копией
+// демо-данных при первом входе под этим логином и дальше живёт своей
+// жизнью независимо от остальных аккаунтов (в рамках текущей вкладки —
+// это клиентское демо без бэкенда, при перезагрузке страницы всё равно
+// сбрасывается для всех).
+function freshStudentSession(): StudentSession {
+  const shynReports: Record<string, ShynReportEntry> = {};
+  Object.keys(SHYN_SEEDS).forEach((id) => {
+    const report = shynReportFor(id);
+    if (report) shynReports[id] = { source: "mock", ...report };
+  });
+  return { assignments: structuredClone(initialAssignments), shynReports };
+}
+
 export default function App() {
   const [loggedIn, setLoggedIn] = useState(false);
   const [role, setRole] = useState<Role>("student");
@@ -30,22 +53,34 @@ export default function App() {
   const [activeTab, setActiveTab] = useState("home");
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
   const [selectedAssignmentId, setSelectedAssignmentId] = useState<string | null>(null);
-  const [assignments, setAssignments] = useState<Assignment[]>(initialAssignments);
+  const [studentSessions, setStudentSessions] = useState<Record<string, StudentSession>>({});
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [shynReports, setShynReports] = useState<Record<string, ShynReportEntry>>(() => {
-    const initial: Record<string, ShynReportEntry> = {};
-    Object.keys(SHYN_SEEDS).forEach((id) => {
-      const report = shynReportFor(id);
-      if (report) initial[id] = { source: "mock", ...report };
-    });
-    return initial;
-  });
   const [reportView, setReportView] = useState<ReportViewState | null>(null);
 
   const navItems = role === "teacher" ? TEACHER_NAV_ITEMS : STUDENT_NAV_ITEMS;
 
+  const studentKey = currentStudent?.login ?? null;
+  const session = studentKey ? studentSessions[studentKey] : undefined;
+  const assignments = session?.assignments ?? [];
+  const shynReports = session?.shynReports ?? {};
+
   const updateAssignment = (id: string, patch: Partial<Assignment>) => {
-    setAssignments((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a)));
+    if (!studentKey) return;
+    setStudentSessions((prev) => {
+      const s = prev[studentKey] ?? freshStudentSession();
+      return {
+        ...prev,
+        [studentKey]: { ...s, assignments: s.assignments.map((a) => (a.id === id ? { ...a, ...patch } : a)) },
+      };
+    });
+  };
+
+  const setShynReportFor = (assignmentId: string, entry: ShynReportEntry) => {
+    if (!studentKey) return;
+    setStudentSessions((prev) => {
+      const s = prev[studentKey] ?? freshStudentSession();
+      return { ...prev, [studentKey]: { ...s, shynReports: { ...s.shynReports, [assignmentId]: entry } } };
+    });
   };
 
   const goToAssignment = (id: string) => {
@@ -65,7 +100,7 @@ export default function App() {
   // сравнивающий с историей ЕГО ЖЕ прошлых работ (другая, гипотетическая
   // концепция, которую реальный бэкенд пока не реализует).
   const handleSubmitted = (assignmentId: string, submission: Submission) => {
-    setShynReports((prev) => ({ ...prev, [assignmentId]: "loading" }));
+    setShynReportFor(assignmentId, "loading");
 
     if (currentStudent?.expectedAuthor) {
       const file = submission?.files?.[0]?.raw || null;
@@ -82,47 +117,41 @@ export default function App() {
           // на полной странице отчёта.
           const verdict = api.docAiTier === "red" ? "red" : api.docAiTier === "yellow" ? "amber" : "green";
           const toPct = (x: number | null | undefined) => (x === null || x === undefined ? null : Math.round(x * 10000) / 100);
-          setShynReports((prev) => ({
-            ...prev,
-            [assignmentId]: {
-              source: "real",
-              status: "ready",
-              verdict,
-              styleScore: api.docAiTier === "red" ? "Н/Д" : (toPct(api.docStyleScore) ?? "н/д"),
-              aiScore: toPct(api.docAiScore),
-              expectedAuthor: api.expectedAuthor,
-              docStyleScore: api.docStyleScore,
-              docStyleTier: api.docStyleTier,
-              docAiScore: api.docAiScore,
-              docAiTier: api.docAiTier,
-              styleReliable: api.styleReliable,
-              totalParagraphs: api.totalParagraphs,
-              flaggedParagraphs: api.flaggedParagraphs,
-              paragraphs: api.paragraphs,
-              modelInfo: api.modelInfo,
-              confidence: api.confidence,
-              wordCount: api.wordCount,
-              disclaimer:
-                "Это вспомогательный индикатор для преподавателя. Он не является " +
-                "автоматическим обвинением и не должен использоваться как " +
-                "единственное основание для решения — финальный вердикт всегда " +
-                "выносит преподаватель.",
-            },
-          }));
+          setShynReportFor(assignmentId, {
+            source: "real",
+            status: "ready",
+            verdict,
+            styleScore: api.docAiTier === "red" ? "Н/Д" : (toPct(api.docStyleScore) ?? "н/д"),
+            aiScore: toPct(api.docAiScore),
+            expectedAuthor: api.expectedAuthor,
+            docStyleScore: api.docStyleScore,
+            docStyleTier: api.docStyleTier,
+            docAiScore: api.docAiScore,
+            docAiTier: api.docAiTier,
+            styleReliable: api.styleReliable,
+            totalParagraphs: api.totalParagraphs,
+            flaggedParagraphs: api.flaggedParagraphs,
+            paragraphs: api.paragraphs,
+            modelInfo: api.modelInfo,
+            confidence: api.confidence,
+            wordCount: api.wordCount,
+            disclaimer:
+              "Это вспомогательный индикатор для преподавателя. Он не является " +
+              "автоматическим обвинением и не должен использоваться как " +
+              "единственное основание для решения — финальный вердикт всегда " +
+              "выносит преподаватель.",
+          });
         })
         .catch((e: unknown) => {
           const message = e instanceof Error ? e.message : String(e);
-          setShynReports((prev) => ({
-            ...prev,
-            [assignmentId]: { source: "real", status: "error", message },
-          }));
+          setShynReportFor(assignmentId, { source: "real", status: "error", message });
         });
       return;
     }
 
     const priorWorksCount = assignments.filter((a) => a.submission).length; // растущая история сдач
     mockAnalyzeSubmission({ submissionId: assignmentId, priorWorksCount, profile: "high" }).then((report) => {
-      setShynReports((prev) => ({ ...prev, [assignmentId]: { source: "mock", ...report } }));
+      setShynReportFor(assignmentId, { source: "mock", ...report });
     });
   };
 
@@ -162,7 +191,16 @@ export default function App() {
       <LoginScreen
         onLogin={(chosenRole, account) => {
           setRole(chosenRole);
-          if (chosenRole === "student") setCurrentStudent(account);
+          if (chosenRole === "student" && account) {
+            setCurrentStudent(account);
+            setStudentSessions((prev) => (prev[account.login] ? prev : { ...prev, [account.login]: freshStudentSession() }));
+          } else {
+            setCurrentStudent(null);
+          }
+          setActiveTab("home");
+          setSelectedCourseId(null);
+          setSelectedAssignmentId(null);
+          setReportView(null);
           setLoggedIn(true);
         }}
       />
@@ -215,7 +253,7 @@ export default function App() {
             </div>
           </div>
           <button
-            onClick={() => setLoggedIn(false)}
+            onClick={() => { setLoggedIn(false); setReportView(null); setSelectedAssignmentId(null); setSelectedCourseId(null); }}
             className="mt-1 w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
           >
             <LogOut size={16} /> Выйти
